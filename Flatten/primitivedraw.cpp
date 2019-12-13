@@ -1,12 +1,16 @@
 #include "primitivedraw.h"
 
-#include "stdafx.h"
 #ifdef WIN32
-#define NOMINMAX 
 #include <windows.h>
 #endif
-#include <GL/gl.h>
-#include <GL/glut.h>
+
+#if defined (__APPLE__) || defined (OSX)
+	#include <OpenGL/gl.h>
+	#include <GLUT/glut.h>
+#else
+	#include <GL/gl.h>
+	#include <GL/glut.h>
+#endif
 
 GLUquadric* quadratic = NULL;
 

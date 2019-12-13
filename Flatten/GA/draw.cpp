@@ -21,6 +21,7 @@
 #include <math.h>
 
 #ifdef WIN32
+#define NOMINMAX
 #include <windows.h>
 #endif
 

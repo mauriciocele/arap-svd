@@ -1,18 +1,16 @@
 // Flatten.cpp : Defines the entry point for the console application.
 //
-
-#include "stdafx.h"
 #ifdef WIN32
-#define NOMINMAX 
+#define NOMINMAX
 #include <windows.h>
 #endif
 
-#include <GL/gl.h>
-
-#if _WIN64
-#include <GL/x64/glut.h>
+#if defined (__APPLE__) || defined (OSX)
+	#include <OpenGL/gl.h>
+	#include <GLUT/glut.h>
 #else
-#include <GL/glut.h>
+	#include <GL/gl.h>
+	#include <GL/glut.h>
 #endif
 
 #include "GA/c3ga.h"
@@ -21,23 +19,21 @@
 
 #include "primitivedraw.h"
 #include "gahelper.h"
-#include "laplacian.h"
-#include "LengthCorrector.h"
+#include "Laplacian.h"
 
 #include <memory>
 
 #include <vector>
 #include <map>
-#include <numerics.h>
-#include "HalfEdge\Mesh.h"
+#include "numerics.h"
+#include "HalfEdge/Mesh.h"
 
-#include "PriorityQueue.h"
-
-#include <geometry.H>
+#include "geometry.h"
 #include "MatrixNxM.h"
 #include "Matrix3x3.h"
 #include "ICP.h"
-#include <Taucs\taucs_interface.h>
+
+#include <Eigen/Sparse>
 
 const char *WINDOW_TITLE = "Interactive 3D Shape Deformation using Conformal Geometric Algebra";
 
@@ -55,7 +51,6 @@ void SpecialUpFunc(int key, int x, int y);
 void Idle();
 void DestroyWindow();
 
-//using namespace boost;
 using namespace c3ga;
 using namespace std;
 using namespace numerics;
@@ -114,7 +109,6 @@ public:
 	dualSphere dS;
 	bool fixed;
 	dualPlane Plane;
-	//int extrema;
 
 	Handle(dualSphere dS, bool fixed, dualPlane dP)
 	{
@@ -132,28 +126,6 @@ public:
 	}
 };
 
-//class Extrema
-//{
-//public:
-//	TRversor R;
-//	TRversor T;
-//	dualSphere dS;
-//	int handle;
-//
-//	Extrema(dualSphere dS)
-//	{
-//		normalizedPoint x = DualSphereCenter(dS);
-//		T = _TRversor( exp(-0.5 * _vectorE3GA(x)^ni) );
-//		R = _TRversor(1.0);
-//		this->dS = inverse(T) * dS * T;
-//	}
-//
-//	TRversor GetTRVersor()
-//	{
-//		return T * R;
-//	}
-//};
-
 Camera g_camera;
 Mesh mesh;
 vectorE3GA g_prevMousePos;
@@ -168,17 +140,17 @@ int g_dragObject;
 std::shared_ptr<SparseMatrix> A;
 std::set<int> constraints;
 std::set<int> fconstraints;
-int Lc;
+Eigen::SparseMatrix<double> Lc;
+Eigen::SparseLU<Eigen::SparseMatrix<double>, Eigen::COLAMDOrdering<int>> solver;
 int systemType = LaplaceBeltrami; //MeanValue; //LaplaceBeltrami
 bool g_showSpheres = true;
 bool g_showWires = false;
 bool g_iterateManyTimes = false;
-double *b3 = nullptr;
-double *xyz = nullptr;
+Eigen::VectorXd b1, b2, b3;
+Eigen::VectorXd x1, x2, x3;
 
 vector<std::shared_ptr<VertexDescriptor>> vertexDescriptors;
 std::vector<std::shared_ptr<Handle>> handles;
-//std::vector<boost::shared_ptr<Extrema>> extremas;
 
 void ComputeLaplacianCoordinates(std::shared_ptr<SparseMatrix> A, vector<std::shared_ptr<VertexDescriptor>>& vertexDescriptors)
 {
@@ -190,7 +162,7 @@ void ComputeLaplacianCoordinates(std::shared_ptr<SparseMatrix> A, vector<std::sh
 	for( int i = 0; i < numRows ; ++i)
 	{
 		SparseMatrix::RowIterator aIter = A->iterator(i);
-		for( ; !aIter.end() ; aIter++ )
+		for( ; !aIter.end() ; ++aIter )
 		{
 			auto j = aIter.columnIndex();
 			vertexDescriptors[i]->laplacianCoordinate += _vectorE3GA(vertexDescriptors[j]->position) * aIter.value();
@@ -200,78 +172,35 @@ void ComputeLaplacianCoordinates(std::shared_ptr<SparseMatrix> A, vector<std::sh
 
 void PreFactor(std::shared_ptr<SparseMatrix> A)
 {
-	Lc = CreateMatrix(A->numRows(), A->numColumns());
+	Lc = Eigen::SparseMatrix<double>(A->numRows(), A->numColumns());
 
 	auto numRows = A->numRows();
-
 	for( int i = 0; i < numRows ; ++i)
 	{
 		if(constraints.find(i) == constraints.end() && fconstraints.find(i) == fconstraints.end())
 		{
 			SparseMatrix::RowIterator aIter = A->iterator(i);
-			for( ; !aIter.end() ; aIter++ )
+			for( ; !aIter.end() ; ++aIter )
 			{
 				auto j = aIter.columnIndex();
-				SetMatrixEntry(Lc, i, j, (*A)(i,j));
+				Lc.insert(i, j) = (*A)(i,j);
 			}
 		}
 		else
 		{
-			SetMatrixEntry(Lc, i, i, 1.0);
+			Lc.insert(i, i) = 1.0;
 		}
 	}
-	FactorATA(Lc);
-}
-
-TRversor RigidBodyMotion(const vector<normalizedPoint>& p, const vector<normalizedPoint>& q)
-{
-	if(p.size() <= 3)
-	{
-		//TODO: If 3 points then FourPlanes method here, 
-		//if 2 points then Quaternion method here, 
-		//if 1 point then just regular GA here
-		return _TRversor(1.0);
+	Lc.makeCompressed();
+	solver.compute(Lc);
+	if(solver.info() != Eigen::Success) {
+		// TODO: error handling
 	}
-
-	vector<normalizedPoint>	x(p.begin(), p.end());
-	set<int> A;
-	for(int i = 0; i < p.size() ; ++i)
-		A.insert(i);
-
-	PriorityQueue<double> priorities(x.size(), false);
-	for(auto iter = A.begin(); iter != A.end() ; iter++ )
-	{
-		int i = *iter;
-		priorities.insert(i, abs(_double(_dualPlane(x[i] - q[i])<<_dualPlane(x[i] - q[i]))) );
-	}
-
-	mv V = mv(1.0);
-	while(A.size() > 0)
-	{
-		int a = priorities.getTopIndex();
-		if(priorities.getTopPriority() < 1e-4)
-		{
-			priorities.pop();
-			A.erase(a);
-			continue;
-		}
-		priorities.pop();
-		dualPlane R = _dualPlane(x[a] - q[a]);
-		V = R * V;
-		A.erase(a);
-		for(auto iter = A.begin(); iter != A.end() ; iter++ )
-		{
-			int i = *iter;
-			x[i] = - R * x[i] * inverse(R);
-			priorities.changePriority(i, abs(_double(_dualPlane(x[i] - q[i])<<_dualPlane(x[i] - q[i]))) );
-		}
-	}
-	return _TRversor(V);
 }
 
 int main(int argc, char* argv[])
 {
-	InitTaucsInterface();
+	//InitTaucsInterface();
 
 	mesh.readOBJ("cactus2.obj"); //armadillo-5k-smooth.obj female.obj david.obj rabbit.obj tyra.obj horse.obj cylinder.obj bar.obj planewithpeaks.obj dragon.obj catHead.obj  cactus.obj  bunny.obj  764_hand-olivier-10kf.obj armadillo.obj
 
@@ -366,8 +295,9 @@ int main(int argc, char* argv[])
 	for(std::set<int>::iterator citer = fconstraints.begin(); citer != fconstraints.end() ; citer++)
 		vertexDescriptors[*citer]->positionConstrained = normalize(_point(inverse(R2) * vertexDescriptors[*citer]->position * R2));
 
-	b3 = new double [A->numRows() * 3];
-	xyz = new double[A->numRows() * 3];
+	b1.resize(A->numRows());
+	b2.resize(A->numRows());
+	b3.resize(A->numRows());
 
 	PreFactor(A);
 
@@ -376,16 +306,16 @@ int main(int argc, char* argv[])
 	return 0;
 }
 
-void SolveLinearSystemTaucs(vector<std::shared_ptr<VertexDescriptor>>& vertexDescriptors)
+void SolveLinearSystem(vector<std::shared_ptr<VertexDescriptor>>& vertexDescriptors)
 {
 	int n = vertexDescriptors.size();
 
 	for( int i = 0 ; i < n ; ++i )
 	{
 		auto &laplacianCoordinate = vertexDescriptors[i]->laplacianCoordinate;
-		b3[i] = laplacianCoordinate.e1();
-		b3[i+n] = laplacianCoordinate.e2();
-		b3[i+2*n] = laplacianCoordinate.e3();
+		b1[i] = laplacianCoordinate.e1();
+		b2[i] = laplacianCoordinate.e2();
+		b3[i] = laplacianCoordinate.e3();
 	}
 
 	TRversor R2 = handles[1]->GetTRVersor();
@@ -394,9 +324,9 @@ void SolveLinearSystemTaucs(vector<std::shared_ptr<VertexDescriptor>>& vertexDes
 	{
 		int i = *citer;
 		auto constraint = normalize(_point(R2 * vertexDescriptors[i]->positionConstrained * R2inv));
-		b3[i] = constraint.e1();
-		b3[i+n] = constraint.e2();
-		b3[i+2*n] = constraint.e3();
+		b1[i] = constraint.e1();
+		b2[i] = constraint.e2();
+		b3[i] = constraint.e3();
 	}
 	TRversor R1 = handles[0]->GetTRVersor();
 	TRversor R1inv = inverse(R1);
@@ -404,16 +334,18 @@ void SolveLinearSystemTaucs(vector<std::shared_ptr<VertexDescriptor>>& vertexDes
 	{
 		int i = *citer;
 		auto constraint = normalize(_point(R1 * vertexDescriptors[i]->positionConstrained * R1inv));
-		b3[i] = constraint.e1();
-		b3[i+n] = constraint.e2();
-		b3[i+2*n] = constraint.e3();
+		b1[i] = constraint.e1();
+		b2[i] = constraint.e2();
+		b3[i] = constraint.e3();
 	}
 
-	SolveATA(Lc, b3, xyz, 3);
+	x1 = solver.solve(b1);
+	x2 = solver.solve(b2);
+	x3 = solver.solve(b3);
 
 	for( int i = 0 ; i < n ; ++i )
 	{
-		vertexDescriptors[i]->deformedPosition = _vectorE3GA(xyz[i], xyz[i+n], xyz[i+2*n]);
+		vertexDescriptors[i]->deformedPosition = _vectorE3GA(x1[i], x2[i], x3[i]);
 		vertexDescriptors[i]->normal = vertexDescriptors[i]->normalOrig;
 	}
 }
@@ -429,7 +361,7 @@ void UpdateLaplaciansRotation(Mesh *mesh, std::shared_ptr<SparseMatrix> A, vecto
 		m.ZeroMatrix();
 		int i = vIter.vertex()->ID;
 		Vector3 &pi = mesh->vertexAt(i)->p;
-		Vector3 &tpi = Vector3(vertexDescriptors[i]->deformedPosition.e1(), vertexDescriptors[i]->deformedPosition.e2(), vertexDescriptors[i]->deformedPosition.e3());
+		const Vector3 &tpi = Vector3(vertexDescriptors[i]->deformedPosition.e1(), vertexDescriptors[i]->deformedPosition.e2(), vertexDescriptors[i]->deformedPosition.e3());
 
 		for(Vertex::EdgeAroundIterator edgeAroundIter = vIter.vertex()->iterator() ; !edgeAroundIter.end() ; edgeAroundIter++)
 		{
@@ -437,7 +369,7 @@ void UpdateLaplaciansRotation(Mesh *mesh, std::shared_ptr<SparseMatrix> A, vecto
 
 			vectorE3GA &vect = vertexDescriptors[j]->deformedPosition;
 			Vector3 &pj = mesh->vertexAt(j)->p;
-			Vector3 &tpj = Vector3(vect.e1(), vect.e2(), vect.e3());
+			const Vector3 &tpj = Vector3(vect.e1(), vect.e2(), vect.e3());
 			Vector3 eij = (pj - pi) * (*A)(i, j);
 			Vector3 teij = tpj - tpi;
 			m[0][0] += eij.x() * teij.x();
@@ -582,19 +514,19 @@ void display()
 	g_camera.glLookAt();
 
 	glLightfv( GL_LIGHT0, /*GL_POSITION*/GL_SPOT_DIRECTION, position );
-
 	glPushMatrix();
 
 	rotorGLMult(g_modelRotor);
 
 	if(!g_computeBasis)
+
 	{
 		static bool oneTime = true;
 		if(oneTime || (g_rotateKeyRotors || g_translateKeyRotors))
 		{
 			if(oneTime == true)
 			{
-				SolveLinearSystemTaucs(vertexDescriptors);
+				SolveLinearSystem(vertexDescriptors);
 			}
 
 			oneTime = false;
@@ -602,7 +534,7 @@ void display()
 			for(int i = 0 ; i < 3 ; ++i)
 			{
 				UpdateLaplaciansRotation(&mesh, A, vertexDescriptors);
-				SolveLinearSystemTaucs(vertexDescriptors);
+				SolveLinearSystem(vertexDescriptors);
 			}
 		}
 	}
@@ -611,7 +543,7 @@ void display()
 		for(int i = 0 ; i < 40 ; ++i)
 		{
 			UpdateLaplaciansRotation(&mesh, A, vertexDescriptors);
-			SolveLinearSystemTaucs(vertexDescriptors);
+			SolveLinearSystem(vertexDescriptors);
 		}
 		g_iterateManyTimes = false;
 	}
@@ -884,8 +816,6 @@ void Idle()
 
 void DestroyWindow()
 {
-	delete[] b3;
-	delete[] xyz;
 	ReleaseDrawing();
 }
 

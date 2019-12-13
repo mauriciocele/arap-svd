@@ -3,7 +3,7 @@
 
 #include "GA/c3ga.h"
 #include "GA/c3ga_util.h"
-#include <geometry.H>
+#include "geometry.h"
 
 using namespace c3ga;
 

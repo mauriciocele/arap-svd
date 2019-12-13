@@ -2,7 +2,7 @@
 #define __MATRIX3X3__H__
 
 #include "svd.h"
-#include <geometry.H>
+#include "geometry.h"
 #include <string>
 #include <functional>
 #include "GA/c3ga.h"
