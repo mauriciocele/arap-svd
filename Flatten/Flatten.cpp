@@ -27,6 +27,7 @@
 #include <map>
 #include "numerics.h"
 #include "HalfEdge/Mesh.h"
+#include "GARotorEstimator.h"
 
 #include <Eigen/Core>
 #include <Eigen/Dense>
@@ -90,8 +91,7 @@ public:
 	vectorE3GA laplacianCoordinate; //laplacian Coordinate
 	vectorE3GA normal; //for rendering (lighting)
 	vectorE3GA normalOrig; //primary backup
-	rotor M;
-	Eigen::Matrix3d R;
+	rotor R;
 	bool isBoundary;
 
 	VertexDescriptor()
@@ -351,7 +351,7 @@ void UpdateLaplaciansRotation(Mesh *mesh, std::shared_ptr<SparseMatrix> A, vecto
 		int i = vIter.vertex()->ID;
 		Vector3 &pi = mesh->vertexAt(i)->p;
 		const Vector3 &tpi = Vector3(vertexDescriptors[i]->deformedPosition.e1(), vertexDescriptors[i]->deformedPosition.e2(), vertexDescriptors[i]->deformedPosition.e3());
-
+		double S = 0;
 		for(Vertex::EdgeAroundIterator edgeAroundIter = vIter.vertex()->iterator() ; !edgeAroundIter.end() ; edgeAroundIter++)
 		{
 			int j = edgeAroundIter.edge_out()->pair->vertex->ID;
@@ -370,16 +370,12 @@ void UpdateLaplaciansRotation(Mesh *mesh, std::shared_ptr<SparseMatrix> A, vecto
 			m(2,0) += eij.z() * teij.x();
 			m(2,1) += eij.z() * teij.y();
 			m(2,2) += eij.z() * teij.z();
+			S += eij.dot(eij);
+			S += teij.dot(teij) * (*A)(i, j);
 		}
-
-		//vertexDescriptors[i]->M = icp.CalculateOptimalTransformation(m);
-		Eigen::JacobiSVD<Eigen::Matrix3d> svdjac(m, Eigen::ComputeFullU | Eigen::ComputeFullV);
-		vertexDescriptors[i]->R = svdjac.matrixV() * svdjac.matrixU().transpose();
-		//vertexDescriptors[i]->M = M.ToRotor();
+		vertexDescriptors[i]->R = GARotorEstimator(m, S);
 	}
 
-	//Matrix3x3 R;
-	//vectorE3GA P, Pp;
 	for( Mesh::VertexIterator vIter = mesh->vertexIterator() ; !vIter.end() ; vIter++ )
 	{
 		int i = vIter.vertex()->ID;
@@ -388,16 +384,11 @@ void UpdateLaplaciansRotation(Mesh *mesh, std::shared_ptr<SparseMatrix> A, vecto
 		{
 			int j = edgeAroundIter.edge_out()->pair->vertex->ID;
 			double wij = (*A)(i, j);
-			//rotor &Ri = vertexDescriptors[i]->M;
-			//rotor &Rj = vertexDescriptors[j]->M;
-			//vectorE3GA V = _vectorE3GA(vertexDescriptors[j]->position) - _vectorE3GA(vertexDescriptors[i]->position);
-			//vectorE3GA Vp = _vectorE3GA(0.5 * wij * (Ri * V * inverse(Ri) + Rj * V * inverse(Rj)));
-			//vertexDescriptors[i]->laplacianCoordinate += Vp;
-
-			vectorE3GA P = _vectorE3GA(vertexDescriptors[j]->position) - _vectorE3GA(vertexDescriptors[i]->position);
-			Eigen::Vector3d b(P.e1(), P.e2(), P.e3());
-			Eigen::Vector3d x = (0.5 * wij) * ((vertexDescriptors[j]->R + vertexDescriptors[i]->R) * b);
-			vertexDescriptors[i]->laplacianCoordinate += _vectorE3GA(x.x(), x.y(), x.z());
+			rotor &Ri = vertexDescriptors[i]->R;
+			rotor &Rj = vertexDescriptors[j]->R;
+			vectorE3GA V = _vectorE3GA(vertexDescriptors[j]->position) - _vectorE3GA(vertexDescriptors[i]->position);
+			vectorE3GA Vp = _vectorE3GA(0.5 * wij * (Ri * V * reverse(Ri) + Rj * V * reverse(Rj)));
+			vertexDescriptors[i]->laplacianCoordinate += Vp;
 		}
 	}
 }
