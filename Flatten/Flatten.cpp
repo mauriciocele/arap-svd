@@ -28,12 +28,10 @@
 #include "numerics.h"
 #include "HalfEdge/Mesh.h"
 
-#include "geometry.h"
-#include "MatrixNxM.h"
-#include "Matrix3x3.h"
-#include "ICP.h"
-
+#include <Eigen/Core>
+#include <Eigen/Dense>
 #include <Eigen/Sparse>
+
 
 const char *WINDOW_TITLE = "Interactive 3D Shape Deformation using Conformal Geometric Algebra";
 
@@ -93,7 +91,7 @@ public:
 	vectorE3GA normal; //for rendering (lighting)
 	vectorE3GA normalOrig; //primary backup
 	rotor M;
-	Matrix3x3 R;
+	Eigen::Matrix3d R;
 	bool isBoundary;
 
 	VertexDescriptor()
@@ -146,8 +144,8 @@ int systemType = LaplaceBeltrami; //MeanValue; //LaplaceBeltrami
 bool g_showSpheres = true;
 bool g_showWires = false;
 bool g_iterateManyTimes = false;
-Eigen::VectorXd b1, b2, b3;
-Eigen::VectorXd x1, x2, x3;
+Eigen::MatrixXd b3;
+Eigen::MatrixXd xyz;
 
 vector<std::shared_ptr<VertexDescriptor>> vertexDescriptors;
 std::vector<std::shared_ptr<Handle>> handles;
@@ -200,8 +198,6 @@ void PreFactor(std::shared_ptr<SparseMatrix> A)
 
 int main(int argc, char* argv[])
 {
-	//InitTaucsInterface();
-
 	mesh.readOBJ("cactus2.obj"); //armadillo-5k-smooth.obj female.obj david.obj rabbit.obj tyra.obj horse.obj cylinder.obj bar.obj planewithpeaks.obj dragon.obj catHead.obj  cactus.obj  bunny.obj  764_hand-olivier-10kf.obj armadillo.obj
 
 	mesh.CenterAndNormalize();
@@ -295,9 +291,7 @@ int main(int argc, char* argv[])
 	for(std::set<int>::iterator citer = fconstraints.begin(); citer != fconstraints.end() ; citer++)
 		vertexDescriptors[*citer]->positionConstrained = normalize(_point(inverse(R2) * vertexDescriptors[*citer]->position * R2));
 
-	b1.resize(A->numRows());
-	b2.resize(A->numRows());
-	b3.resize(A->numRows());
+	b3 = Eigen::MatrixXd(A->numRows(), 3);
 
 	PreFactor(A);
 
@@ -313,9 +307,9 @@ void SolveLinearSystem(vector<std::shared_ptr<VertexDescriptor>>& vertexDescript
 	for( int i = 0 ; i < n ; ++i )
 	{
 		auto &laplacianCoordinate = vertexDescriptors[i]->laplacianCoordinate;
-		b1[i] = laplacianCoordinate.e1();
-		b2[i] = laplacianCoordinate.e2();
-		b3[i] = laplacianCoordinate.e3();
+		b3(i,0) = laplacianCoordinate.e1();
+		b3(i,1) = laplacianCoordinate.e2();
+		b3(i,2) = laplacianCoordinate.e3();
 	}
 
 	TRversor R2 = handles[1]->GetTRVersor();
@@ -324,9 +318,9 @@ void SolveLinearSystem(vector<std::shared_ptr<VertexDescriptor>>& vertexDescript
 	{
 		int i = *citer;
 		auto constraint = normalize(_point(R2 * vertexDescriptors[i]->positionConstrained * R2inv));
-		b1[i] = constraint.e1();
-		b2[i] = constraint.e2();
-		b3[i] = constraint.e3();
+		b3(i,0) = constraint.e1();
+		b3(i,1) = constraint.e2();
+		b3(i,2) = constraint.e3();
 	}
 	TRversor R1 = handles[0]->GetTRVersor();
 	TRversor R1inv = inverse(R1);
@@ -334,31 +328,26 @@ void SolveLinearSystem(vector<std::shared_ptr<VertexDescriptor>>& vertexDescript
 	{
 		int i = *citer;
 		auto constraint = normalize(_point(R1 * vertexDescriptors[i]->positionConstrained * R1inv));
-		b1[i] = constraint.e1();
-		b2[i] = constraint.e2();
-		b3[i] = constraint.e3();
+		b3(i,0) = constraint.e1();
+		b3(i,1) = constraint.e2();
+		b3(i,2) = constraint.e3();
 	}
 
-	x1 = solver.solve(b1);
-	x2 = solver.solve(b2);
-	x3 = solver.solve(b3);
+	xyz = solver.solve(b3);
 
 	for( int i = 0 ; i < n ; ++i )
 	{
-		vertexDescriptors[i]->deformedPosition = _vectorE3GA(x1[i], x2[i], x3[i]);
+		vertexDescriptors[i]->deformedPosition = _vectorE3GA(xyz(i,0), xyz(i,1), xyz(i,2));
 		vertexDescriptors[i]->normal = vertexDescriptors[i]->normalOrig;
 	}
 }
 
 void UpdateLaplaciansRotation(Mesh *mesh, std::shared_ptr<SparseMatrix> A, vector<std::shared_ptr<VertexDescriptor>>& vertexDescriptors)
 {
-	Matrix3x3 m;
-	Matrix3x3 U, W, V, Ut;
-	Matrix3x3 M;
-	//ICP icp;
+	Eigen::Matrix3d m;
 	for( Mesh::VertexIterator vIter = mesh->vertexIterator() ; !vIter.end() ; vIter++ )
 	{
-		m.ZeroMatrix();
+		m.setZero();
 		int i = vIter.vertex()->ID;
 		Vector3 &pi = mesh->vertexAt(i)->p;
 		const Vector3 &tpi = Vector3(vertexDescriptors[i]->deformedPosition.e1(), vertexDescriptors[i]->deformedPosition.e2(), vertexDescriptors[i]->deformedPosition.e3());
@@ -372,39 +361,20 @@ void UpdateLaplaciansRotation(Mesh *mesh, std::shared_ptr<SparseMatrix> A, vecto
 			const Vector3 &tpj = Vector3(vect.e1(), vect.e2(), vect.e3());
 			Vector3 eij = (pj - pi) * (*A)(i, j);
 			Vector3 teij = tpj - tpi;
-			m[0][0] += eij.x() * teij.x();
-			m[0][1] += eij.x() * teij.y();
-			m[0][2] += eij.x() * teij.z();
-			m[1][0] += eij.y() * teij.x();
-			m[1][1] += eij.y() * teij.y();
-			m[1][2] += eij.y() * teij.z();
-			m[2][0] += eij.z() * teij.x();
-			m[2][1] += eij.z() * teij.y();
-			m[2][2] += eij.z() * teij.z();
+			m(0,0) += eij.x() * teij.x();
+			m(0,1) += eij.x() * teij.y();
+			m(0,2) += eij.x() * teij.z();
+			m(1,0) += eij.y() * teij.x();
+			m(1,1) += eij.y() * teij.y();
+			m(1,2) += eij.y() * teij.z();
+			m(2,0) += eij.z() * teij.x();
+			m(2,1) += eij.z() * teij.y();
+			m(2,2) += eij.z() * teij.z();
 		}
 
 		//vertexDescriptors[i]->M = icp.CalculateOptimalTransformation(m);
-
-		m.SVD(U, W, V);
-		Ut = U.Transpose();
-		M = V * Ut;
-		if( M.Determinant() < 0 )
-		{
-			if( W[0][0] < W[1][1] && W[0][0] < W[2][2])
-			{
-				V[0][0] *= -1; V[1][0] *= -1; V[2][0] *= -1;
-			}
-			else if( W[1][1] < W[0][0] && W[1][1] < W[2][2])
-			{
-				V[0][1] *= -1; V[1][1] *= -1; V[2][1] *= -1;
-			}
-			else if( W[2][2] < W[0][0] && W[2][2] < W[1][1])
-			{
-				V[0][2] *= -1; V[1][2] *= -1; V[2][2] *= -1;
-			}
-			M = V * Ut;
-		}
-		vertexDescriptors[i]->R = M;
+		Eigen::JacobiSVD<Eigen::Matrix3d> svdjac(m, Eigen::ComputeFullU | Eigen::ComputeFullV);
+		vertexDescriptors[i]->R = svdjac.matrixV() * svdjac.matrixU().transpose();
 		//vertexDescriptors[i]->M = M.ToRotor();
 	}
 
@@ -425,8 +395,9 @@ void UpdateLaplaciansRotation(Mesh *mesh, std::shared_ptr<SparseMatrix> A, vecto
 			//vertexDescriptors[i]->laplacianCoordinate += Vp;
 
 			vectorE3GA P = _vectorE3GA(vertexDescriptors[j]->position) - _vectorE3GA(vertexDescriptors[i]->position);
-			vectorE3GA Pp = (0.5 * wij) * ((vertexDescriptors[j]->R + vertexDescriptors[i]->R) * P);
-			vertexDescriptors[i]->laplacianCoordinate += Pp;
+			Eigen::Vector3d b(P.e1(), P.e2(), P.e3());
+			Eigen::Vector3d x = (0.5 * wij) * ((vertexDescriptors[j]->R + vertexDescriptors[i]->R) * b);
+			vertexDescriptors[i]->laplacianCoordinate += _vectorE3GA(x.x(), x.y(), x.z());
 		}
 	}
 }

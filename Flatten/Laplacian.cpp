@@ -143,7 +143,7 @@ std::shared_ptr<SparseMatrix> CreateLaplacianMatrix(Mesh *mesh, int type)
 		}
 		(*L)(i, i) = -w;
 		if(type == LaplaceBeltrami)
-			areas.push_back((fabs(area)>FLT_MIN ? 1.0 : 0.0)); //used to be 1.0 / area
+			areas.push_back((fabs(area)>FLT_MIN ? 1.0 / area : 0.0)); //used to be 1.0 / area
 		else
 			areas.push_back((fabs(w)>FLT_MIN ? 1.0 / w : 0.0));
 	}
