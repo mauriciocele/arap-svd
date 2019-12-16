@@ -92,7 +92,6 @@ public:
 	std::vector<Eigen::Vector3d> normal; //for rendering (lighting)
 	std::vector<Eigen::Vector3d> normalOrig; //primary backup
 	std::vector<Eigen::Quaterniond> R;
-	std::vector<bool> isBoundary;
 	int size;
 
 	VertexBuffer() : size(0)
@@ -109,7 +108,6 @@ public:
 		normal.resize(size);
 		normalOrig.resize(size);
 		R.resize(size);
-		isBoundary.resize(size);
 	}
 	int get_size() { return size; }
 };
@@ -138,17 +136,18 @@ public:
 	TRversor R;
 	TRversor T;
 	dualSphere dS;
-	bool fixed;
-	dualPlane Plane;
+	std::set<int> constraints;
 
-	Handle(dualSphere dS, bool fixed, dualPlane dP)
+	Handle() {
+		T = _TRversor(1.0);
+		R = _TRversor(1.0);
+	}
+	Handle(dualSphere dS)
 	{
 		normalizedPoint x = DualSphereCenter(dS);
 		T = _TRversor( exp(-0.5 * _vectorE3GA(x)^ni) );
 		R = _TRversor(1.0);
-		Plane = dP;
 		this->dS = inverse(T) * dS * T;
-		this->fixed = fixed;
 	}
 
 	TRversor GetTRVersor()
@@ -169,8 +168,6 @@ bool g_computeBasis = false;
 float g_dragDistance = -1.0f;
 int g_dragObject;
 std::shared_ptr<SparseMatrix> A;
-std::set<int> constraints;
-std::set<int> fconstraints;
 Eigen::SparseMatrix<double> Lc;
 Eigen::SparseLU<Eigen::SparseMatrix<double>, Eigen::COLAMDOrdering<int>> solver;
 int systemType = LaplaceBeltrami; //MeanValue; //LaplaceBeltrami
@@ -182,7 +179,7 @@ Eigen::MatrixXd xyz;
 
 VertexBuffer vertexDescriptors;
 IndexBuffer triangles;
-std::vector<std::shared_ptr<Handle>> handles;
+std::vector<Handle> handles;
 
 Eigen::Vector3d _vector3d( const normalizedPoint& p)
 {
@@ -204,18 +201,27 @@ std::vector<Eigen::Vector3d> ComputeLaplacianCoordinates(std::shared_ptr<SparseM
 			laplacianCoordinates[i] += mesh->vertexAt(j)->p * aIter.value();
 		}
 	}
-	
+
 	return laplacianCoordinates;
 }
 
-void PreFactor(std::shared_ptr<SparseMatrix> A)
+bool is_constrained(std::vector<Handle>& handles, int vertex)
+{
+	for(Handle& handle : handles) {
+		if(handle.constraints.find(vertex) != handle.constraints.end())
+			return true;
+	}
+	return false;
+}
+
+void PreFactor(std::shared_ptr<SparseMatrix> A, std::vector<Handle>& handles)
 {
 	Lc = Eigen::SparseMatrix<double>(A->numRows(), A->numColumns());
 
 	auto numRows = A->numRows();
 	for( int i = 0; i < numRows ; ++i)
 	{
-		if(constraints.find(i) == constraints.end() && fconstraints.find(i) == fconstraints.end())
+		if(!is_constrained(handles, i))
 		{
 			SparseMatrix::RowIterator aIter = A->iterator(i);
 			for( ; !aIter.end() ; ++aIter )
@@ -263,12 +269,9 @@ int main(int argc, char* argv[])
 
 	InitializeDrawing();
 
-	dualPlane P1 = _dualPlane(c3gaPoint(.0, 0.8,.0) << (_vectorE3GA(0,1,0)*ni));
-	dualPlane P2 = _dualPlane(c3gaPoint(.0,-0.8,.0) << (_vectorE3GA(0,-1,0)*ni));
-
 	//cactus.obj
-	handles.push_back(std::shared_ptr<Handle>(new Handle(_dualSphere(c3gaPoint(.0, .04, 0.7) - 0.5*SQR(0.15)*ni), false, P1)));
-	handles.push_back(std::shared_ptr<Handle>(new Handle(_dualSphere(c3gaPoint(.0, .04, -0.8) - 0.5*SQR(0.15)*ni), true, P2)));
+	handles.push_back(Handle(_dualSphere(c3gaPoint(.0, .04, 0.7) - 0.5*SQR(0.15)*ni)));
+	handles.push_back(Handle(_dualSphere(c3gaPoint(.0, .04, -0.8) - 0.5*SQR(0.15)*ni)));
 
 	////cylinder.obj
 	//handles.push_back( boost::shared_ptr<Handle>( new Handle( _dualSphere(c3gaPoint(.0, 0.9,.0) - 0.5*SQR(0.25)*ni), false, P1 ) ) );
@@ -292,34 +295,20 @@ int main(int argc, char* argv[])
 		int i = vIter.vertex()->ID;
 		vertexDescriptors.position[i] = c3gaPoint( vIter.vertex()->p.x(), vIter.vertex()->p.y(), vIter.vertex()->p.z() );
 		vertexDescriptors.normalOrig[i] = vIter.vertex()->n;
-		vertexDescriptors.isBoundary[i] = vIter.vertex()->isBoundary();
 
-		for( int h = 0 ; h < handles.size() ;  ++h )
+		for( Handle& handle : handles)
 		{
-			TRversor TR = handles[h]->GetTRVersor();
+			TRversor TR = handle.GetTRVersor();
 
-			if( _double(vertexDescriptors.position[i] << (TR * handles[h]->dS * inverse(TR))) > 0 ) //inside the sphere
-			//if( _double(vd->position << handles[i]->Plane) > 0 ) //positive side of the plane
+			if( _double(vertexDescriptors.position[i] << (TR * handle.dS * inverse(TR))) > 0 ) //inside the sphere
 			{
-				if( !handles[h]->fixed )
-				{
-					constraints.insert(i);
-				}
-				else
-				{
-					fconstraints.insert(i);
-				}
+				handle.constraints.insert(i);
 			}
-		}
-		if(vertexDescriptors.isBoundary[i])
-		{
-			fconstraints.insert(i);
 		}
 	}
 
 	triangles.resize(mesh.numFaces()*3);
-	for( Mesh::FaceIterator fIter = mesh.faceIterator() ; !fIter.end() ; fIter++ )
-	{
+	for( Mesh::FaceIterator fIter = mesh.faceIterator() ; !fIter.end() ; fIter++ ) {
 		Face		*face = fIter.face();
 		int i = face->ID;
 		int	v1 = face->edge->vertex->ID;
@@ -334,17 +323,16 @@ int main(int argc, char* argv[])
 	
 	vertexDescriptors.laplacianCoordinate = ComputeLaplacianCoordinates(A, &mesh);
 
-	TRversor R1 = handles[0]->GetTRVersor();
-	for(std::set<int>::iterator citer = constraints.begin(); citer != constraints.end() ; citer++)
-		vertexDescriptors.positionConstrained[*citer] = normalize(_point(inverse(R1) * vertexDescriptors.position[*citer] * R1));
-
-	TRversor R2 = handles[1]->GetTRVersor();
-	for(std::set<int>::iterator citer = fconstraints.begin(); citer != fconstraints.end() ; citer++)
-		vertexDescriptors.positionConstrained[*citer] = normalize(_point(inverse(R2) * vertexDescriptors.position[*citer] * R2));
+	for( Handle& handle : handles)
+	{
+		TRversor R1 = handle.GetTRVersor();
+		for(int i : handle.constraints)
+			vertexDescriptors.positionConstrained[i] = normalize(_point(inverse(R1) * vertexDescriptors.position[i] * R1));
+	}
 
 	b3 = Eigen::MatrixXd(A->numRows(), 3);
 
-	PreFactor(A);
+	PreFactor(A, handles);
 
 	glutMainLoop();
 
@@ -360,25 +348,16 @@ void SolveLinearSystem(VertexBuffer& vertexDescriptors)
 		b3.row(i) = vertexDescriptors.laplacianCoordinate[i];
 	}
 
-	TRversor R2 = handles[1]->GetTRVersor();
-	TRversor R2inv = inverse(R2);
-	for(std::set<int>::iterator citer = fconstraints.begin(); citer != fconstraints.end() ; citer++)
-	{
-		int i = *citer;
-		auto constraint = normalize(_point(R2 * vertexDescriptors.positionConstrained[i] * R2inv));
-		b3(i,0) = constraint.e1();
-		b3(i,1) = constraint.e2();
-		b3(i,2) = constraint.e3();
-	}
-	TRversor R1 = handles[0]->GetTRVersor();
-	TRversor R1inv = inverse(R1);
-	for(std::set<int>::iterator citer = constraints.begin(); citer != constraints.end() ; citer++)
-	{
-		int i = *citer;
-		auto constraint = normalize(_point(R1 * vertexDescriptors.positionConstrained[i] * R1inv));
-		b3(i,0) = constraint.e1();
-		b3(i,1) = constraint.e2();
-		b3(i,2) = constraint.e3();
+	for( Handle& handle : handles) {
+		TRversor M = handle.GetTRVersor();
+		TRversor Minv = inverse(M);
+		for(int i : handle.constraints)
+		{
+			auto constraint = normalize(_point(M * vertexDescriptors.positionConstrained[i] * Minv));
+			b3(i,0) = constraint.e1();
+			b3(i,1) = constraint.e2();
+			b3(i,2) = constraint.e3();
+		}
 	}
 
 	xyz = solver.solve(b3);
@@ -607,8 +586,8 @@ void display()
 		for( int k = 0 ; k < handles.size() ; ++k)
 		{
 			if (GLpick::g_pickActive) glLoadName((GLuint)k);
-			TRversor R = handles[k]->GetTRVersor();
-			DrawTransparentDualSphere( _dualSphere( R * handles[k]->dS * inverse(R) ), turcoise );
+			TRversor R = handles[k].GetTRVersor();
+			DrawTransparentDualSphere( _dualSphere( R * handles[k].dS * inverse(R) ), turcoise );
 		}		
 	}
 
@@ -694,8 +673,8 @@ void MouseMotion(int x, int y)
 			rotor R1 =  _rotor( exp(-g_camera.rotateVel * (motion ^ e3) ) );
 			if(g_dragObject < handles.size())
 			{
-				TRversor R = handles[g_dragObject]->R;
-				handles[g_dragObject]->R = normalize(_TRversor( R1 * R  ) );
+				TRversor R = handles[g_dragObject].R;
+				handles[g_dragObject].R = normalize(_TRversor( R1 * R  ) );
 			}
 		}
 
@@ -704,8 +683,8 @@ void MouseMotion(int x, int y)
 			normalizedTranslator T1 = _normalizedTranslator(inverse(g_modelRotor) * exp( _freeVector(-g_camera.translateVel*motion*ni) ) * g_modelRotor);
 			if(g_dragObject < handles.size())
 			{
-				TRversor T = handles[g_dragObject]->T;
-				handles[g_dragObject]->T = normalize(_TRversor( T1 * T ));
+				TRversor T = handles[g_dragObject].T;
+				handles[g_dragObject].T = normalize(_TRversor( T1 * T ));
 			}
 		}
 
@@ -732,7 +711,7 @@ void SpecialFunc(int key, int x, int y)
 			{
 				if(g_rotateKeyRotors)
 				{
-					handles[g_dragObject]->dS = ChangeDualSphereRadiusSize(handles[g_dragObject]->dS, 0.025);
+					handles[g_dragObject].dS = ChangeDualSphereRadiusSize(handles[g_dragObject].dS, 0.025);
 
 					// redraw viewport
 					glutPostRedisplay();
@@ -743,7 +722,7 @@ void SpecialFunc(int key, int x, int y)
 			{
 				if(g_rotateKeyRotors)
 				{
-					handles[g_dragObject]->dS = ChangeDualSphereRadiusSize(handles[g_dragObject]->dS, -0.025);
+					handles[g_dragObject].dS = ChangeDualSphereRadiusSize(handles[g_dragObject].dS, -0.025);
 
 					// redraw viewport
 					glutPostRedisplay();
