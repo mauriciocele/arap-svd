@@ -6,7 +6,8 @@
 
 #ifndef EDGE_CM
 #define EDGE_CM
-#include "Vector3.h"
+#include <Eigen/Core>
+#include <Eigen/Dense>
 
 class Vertex;
 class Face;

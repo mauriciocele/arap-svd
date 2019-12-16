@@ -45,7 +45,7 @@ void Mesh::clear() {
    }
 }
 
-Vertex * Mesh::addVertex(const Vector3 & _p) {
+Vertex * Mesh::addVertex(const Eigen::Vector3d & _p) {
    Vertex * v = new Vertex();
    v->p = _p;
    v->ID = (int)vertices.size();
@@ -208,13 +208,12 @@ void Mesh::computeLengths() {
       Edge * e = eIter.edge();
 	  e->ID = eIndex;
 	  e->pair->ID = eIndex;
-      e->length = (e->vertex->p - e->next->vertex->p).abs();
+      e->length = (e->vertex->p - e->next->vertex->p).norm();
       e->pair->length = e->length;
    }
 }
 
 static double arc_cosine ( double c )
-
 //****************************************************************************80
 //
 //  Purpose:
@@ -334,21 +333,21 @@ void Mesh::computeCirclePackingMetric()
 
 void Mesh::computeNormals()
 {
-	map< int, Vector3 >					normals;
+	map< int, Eigen::Vector3d >					normals;
 
 	for( Mesh::FaceIterator fIter = this->faceIterator() ; !fIter.end() ; fIter++ )
 	{
 		Face		*face = fIter.face();
-		Vector3		u = face->edge->next->vertex->p - face->edge->vertex->p;
-		Vector3		v = face->edge->next->next->vertex->p - face->edge->vertex->p;
-		Vector3		n = u.crossProduct(v).norm();
-		normals.insert( pair<int, Vector3>(face->ID, n) );
+		Eigen::Vector3d		u = face->edge->next->vertex->p - face->edge->vertex->p;
+		Eigen::Vector3d		v = face->edge->next->next->vertex->p - face->edge->vertex->p;
+		Eigen::Vector3d		n = u.cross(v).normalized();
+		normals.insert( pair<int, Eigen::Vector3d>(face->ID, n) );
 	}
 
 	for( Mesh::VertexIterator vIter = this->vertexIterator() ; !vIter.end() ; vIter++ )
 	{
 		int		valence = 0;
-		vIter.vertex()->n = Vector3(0,0,0);
+		vIter.vertex()->n = Eigen::Vector3d(0,0,0);
 
 		for( Vertex::EdgeAroundIterator	around = vIter.vertex()->iterator(); !around.end(); around++ )
 		{
@@ -522,10 +521,10 @@ void Mesh::CenterAndNormalize()
 		if(vIter.vertex()->p.z() < minZ) minZ = vIter.vertex()->p.z();
 	}
 
-	Vector3 min(minX,minY,minZ);
-	Vector3 max(maxX,maxY,maxZ);
+	Eigen::Vector3d min(minX,minY,minZ);
+	Eigen::Vector3d max(maxX,maxY,maxZ);
 
-	Vector3 center = min + (max - min) * 0.5;
+	Eigen::Vector3d center = min + (max - min) * 0.5;
 
 	//Vector3 center(0,0,0);
 	//for( VertexIterator vIter = vertexIterator() ; !vIter.end() ; vIter++ )
@@ -539,7 +538,7 @@ void Mesh::CenterAndNormalize()
 		vIter.vertex()->p -= center;
 	}
 
-	double diag = (max - min).abs() / 2.0;
+	double diag = (max - min).norm() / 2.0;
 	double scale = 1.0 / diag;
 	for( VertexIterator vIter = vertexIterator() ; !vIter.end() ; vIter++ )
 	{
@@ -590,9 +589,9 @@ Files with vt tags also can be parsed
 void Mesh::readOBJ(const char * obj_file) {
    string front;
    string v = "v", vt = "vt", f = "f";
-   Vector3 vert;
+   Eigen::Vector3d vert;
    vector<int> verts;
-   vector<Vector3> uvVec;
+   vector<Eigen::Vector3d> uvVec;
    vector<int> uvs;
    char etc;
    int id;

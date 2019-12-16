@@ -8,7 +8,8 @@
 #include <iostream>
 #include "Edge.h"
 #include "Vertex.h"
-#include "Vector3.h"
+#include <Eigen/Core>
+#include <Eigen/Dense>
 
 /** Face for the mesh datastructure.
 

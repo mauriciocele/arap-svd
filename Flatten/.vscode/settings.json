@@ -75,6 +75,7 @@
         "*.tcc": "cpp",
         "hash_map": "cpp",
         "cinttypes": "cpp",
-        "hashtable": "cpp"
+        "hashtable": "cpp",
+        "stack": "cpp"
     }
 }

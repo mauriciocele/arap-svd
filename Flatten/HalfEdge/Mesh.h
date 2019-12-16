@@ -69,7 +69,7 @@ public:
    ~Mesh(void);
    void clear();
 
-   Vertex * addVertex(const Vector3 & p);
+   Vertex * addVertex(const Eigen::Vector3d & p);
    Face * addFace(std::vector<int> faceVerts);
    Edge * addEdge(int i, int j);
    Edge * addEdge(Edge * e) {

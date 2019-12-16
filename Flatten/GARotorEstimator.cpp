@@ -117,7 +117,7 @@ w (p + q) + L . (p + q) + (q - p) x L = 0
 | s   -[d]_x | | s   [d]_x |   | s x d  s s^T - [d]^2_x |   | s x d  s s^T - d d^t + d^T d I |
 
 */
-c3ga::rotor GARotorEstimator(const vector<Vector3d>& P, const vector<Vector3d>& Q, const vector<double>& w)
+Quaterniond GARotorEstimator(const vector<Vector3d>& P, const vector<Vector3d>& Q, const vector<double>& w)
 {
 	array<double, 10> H;
 	Matrix3d Sx;
@@ -154,12 +154,12 @@ c3ga::rotor GARotorEstimator(const vector<Vector3d>& P, const vector<Vector3d>& 
 		lambda = lambda - characteristic(H, lambda) / deriv_characteristic(H, lambda);
 	} while(std::abs(lambda_prev - lambda) > 1e-5);
 
-	Vector4d R = hyperplanes_intersection(H, lambda);
+	Quaterniond R = Quaterniond(hyperplanes_intersection(H, lambda));
 	R.normalize();
-	return c3ga::rotor(c3ga::rotor_scalar_e1e2_e2e3_e3e1, R.w(), -R.z(), -R.x(), R.y());
+	return R;
 }
 
-c3ga::rotor GARotorEstimator(const Matrix3d& Sx, const double S)
+Quaterniond GARotorEstimator(const Matrix3d& Sx, const double S)
 {
 	array<double, 10> H;
 	double wj;
@@ -184,7 +184,7 @@ c3ga::rotor GARotorEstimator(const Matrix3d& Sx, const double S)
 		lambda = lambda - characteristic(H, lambda) / deriv_characteristic(H, lambda);
 	} while(std::abs(lambda_prev - lambda) > 1e-5);
 
-	Vector4d R = hyperplanes_intersection(H, lambda);
+	Quaterniond R = Quaterniond(hyperplanes_intersection(H, lambda));
 	R.normalize();
-	return c3ga::rotor(c3ga::rotor_scalar_e1e2_e2e3_e3e1, R.w(), -R.z(), -R.x(), R.y());
+	return R;
 }

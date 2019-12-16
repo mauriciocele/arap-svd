@@ -18,9 +18,9 @@ public:
    Edge * edge;
 
    // geometry data
-   Vector3 p;
-   Vector3 n;
-   Vector3 uv;
+   Eigen::Vector3d p;
+   Eigen::Vector3d n;
+   Eigen::Vector3d uv;
 
    // Cone angle data (multiple of pi is stored)
    double min_cone_angle;
@@ -39,7 +39,7 @@ public:
    // to check various iterations
    bool check;
 
-   Vertex (const Vector3 & _pos = Vector3(0,0,0)): 
+   Vertex (const Eigen::Vector3d & _pos = Eigen::Vector3d(0,0,0)): 
    edge(NULL), p(_pos), uv(0,0,0)
    {
       cone_angle = min_cone_angle = max_cone_angle = 2;

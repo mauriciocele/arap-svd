@@ -1,4 +1,5 @@
 #include "primitivedraw.h"
+#include <algorithm>
 
 #ifdef WIN32
 #include <windows.h>
@@ -104,7 +105,7 @@ void DrawArc(const dualCircle& circle, const normalizedPoint& a, const normalize
 	vecA = vecA * (1.0/_double(norm_e(vecA)));
 	vecB = vecB * (1.0/_double(norm_e(vecB)));
 
-	int size = 50; MIN( abs(radius), 50);
+	int size = 50; std::min( abs(radius), 50.0f);
 
 	vectorE3GA vecXi = vecA;
 	for( int i = 1 ; i <= size; ++i)

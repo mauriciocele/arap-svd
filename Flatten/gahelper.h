@@ -8,8 +8,7 @@ using namespace c3ga;
 
 typedef tangentVector dualCircle;
 #define SQR(x)		((x)*(x))
-#define MAX(x, y)	(((x) > (y)) ? (x) : (y))
-#define MIN(x, y)	(((x) < (y)) ? (x) : (y))
+
 
 inline double arc_cosine ( double c )
 //****************************************************************************80
