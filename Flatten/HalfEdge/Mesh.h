@@ -28,18 +28,18 @@ private:
    struct edge_comp {
       edge_comp() {}
       bool operator()( const Edge *e1, const Edge *e2 ) const {
-	 int b1 = e1->vertex->ID, t1 = e1->pair->vertex->ID;
-	 int b2 = e2->vertex->ID, t2 = e2->pair->vertex->ID; 
+         int b1 = e1->vertex->ID, t1 = e1->pair->vertex->ID;
+         int b2 = e2->vertex->ID, t2 = e2->pair->vertex->ID; 
 
-	 int min1, min2, max1, max2;
-	 min1 = std::min(b1, t1); min2 = std::min(b2, t2);
-	 max1 = std::max(b1, t1); max2 = std::max(b2, t2);
-	 if (min1 == min2 && max1 == max2){
-	    if (b1 < b2) return true;
-	    return (b1 == b2 && t1 < t2);
-	 }
-	 if (min1 < min2)     return true;
-	 return (min1 == min2 && max1 < max2);	
+         int min1, min2, max1, max2;
+         min1 = std::min(b1, t1); min2 = std::min(b2, t2);
+         max1 = std::max(b1, t1); max2 = std::max(b2, t2);
+         if (min1 == min2 && max1 == max2){
+            if (b1 < b2) return true;
+            return (b1 == b2 && t1 < t2);
+         }
+         if (min1 < min2)     return true;
+         return (min1 == min2 && max1 < max2);	
       }
    };
 
@@ -77,8 +77,6 @@ public:
       return e;
    }
 
-   bool cutAlongEdge(Edge * forward);
-
    inline Vertex * vertexAt (int i) {return vertices[i];}
    inline Face * faceAt (int i) {return faces[i];}
 
@@ -105,13 +103,9 @@ public:
    void CenterAndNormalize();
 
    void readOBJ(const char * obj_file);
-   void readCONE_VERT(const char * vert_file);
-   void readCUT_EDGES(const char * edge_file);
    void writeOBJ(const char * obj_file);
    void writeVT(const char * vt_file);
 
-   void computeLengths();
-   void computeCirclePackingMetric();
    void computeNormals();
 
    void finishMesh() {
@@ -131,34 +125,33 @@ public:
       FaceSet * facesPtr;
    public:
       FaceIterator() {
-	 facesPtr = NULL;
+	      facesPtr = NULL;
       }
 
       FaceIterator(FaceSet * _faces) {
-	 facesPtr = _faces;
-	 fIter = _faces->begin();
+         facesPtr = _faces;
+         fIter = _faces->begin();
       }
       FaceIterator& operator++( void ){
-	 fIter++;
-	 return *this;
+         fIter++;
+         return *this;
       }
       FaceIterator operator++( int ){
-	 FaceIterator r = *this; ++*this; return r;
+      	 FaceIterator r = *this; ++*this; return r;
       }
       FaceIterator& operator--( void ){
-	 fIter--;
-	 return *this;
+         fIter--;
+         return *this;
       }
       FaceIterator operator--( int ){
-	 FaceIterator r = *this; --*this; return r;
+      	 FaceIterator r = *this; --*this; return r;
       }
 
       Face * face( void ) const { return *fIter; }
       //Face * & face( void )     { return *fIter; }
 
       void reset() {fIter = facesPtr->begin(); }
-      bool end(void) { return fIter == facesPtr->end();
-      ;}
+      bool end(void) { return fIter == facesPtr->end(); }
    };
 
    class VertexIterator {
@@ -167,26 +160,26 @@ public:
       VertexSet * verticesPtr;
    public:
       VertexIterator() {
-	 verticesPtr = NULL;
+	      verticesPtr = NULL;
       }
 
       VertexIterator(VertexSet * _vertices) {
-	 vIter = _vertices->begin();
-	 verticesPtr = _vertices;
+         vIter = _vertices->begin();
+         verticesPtr = _vertices;
       }
       VertexIterator& operator++( void ){
-	 vIter++;
-	 return *this;
+         vIter++;
+         return *this;
       }
       VertexIterator operator++( int ){
-	 VertexIterator r = *this; ++*this; return r;
+      	 VertexIterator r = *this; ++*this; return r;
       }
       VertexIterator& operator--( void ){
-	 vIter--;
-	 return *this;
+         vIter--;
+         return *this;
       }
       VertexIterator operator--( int ){
-	 VertexIterator r = *this; --*this; return r;
+      	 VertexIterator r = *this; --*this; return r;
       }
 
       Vertex * vertex( void ) const { return *vIter; }
@@ -202,32 +195,32 @@ public:
       EdgeSet * edgesPtr;
    public:
       HalfEdgeIterator() {
-	 edgesPtr = NULL;
+	      edgesPtr = NULL;
       }
       HalfEdgeIterator(EdgeSet * _edges) {
-	 eIter = _edges->begin();
-	 edgesPtr = _edges;
+         eIter = _edges->begin();
+         edgesPtr = _edges;
       }
       HalfEdgeIterator& operator++( void ){
-	 eIter++;
-	 return *this;
+         eIter++;
+         return *this;
       }
       HalfEdgeIterator operator++( int ){
-	 HalfEdgeIterator r = *this; ++*this; return r;
+         HalfEdgeIterator r = *this; ++*this; return r;
       }
       HalfEdgeIterator& operator--( void ){
-	 eIter--;
-	 return *this;
+         eIter--;
+         return *this;
       }
       HalfEdgeIterator operator--( int ){
-	 HalfEdgeIterator r = *this; --*this; return r;
+      	 HalfEdgeIterator r = *this; --*this; return r;
       }
 
       Edge * half_edge( void ) const { return *eIter; }
       //		Edge * & operator*( void )     { return *eIter; }
 
       void find (Edge * eTmp) {
-	 eIter = edgesPtr->find(eTmp);
+	      eIter = edgesPtr->find(eTmp);
       }
 
       void reset() {eIter = edgesPtr->begin(); }
@@ -241,26 +234,26 @@ public:
 
    public:
       EdgeIterator() {
-	 edgesPtr = NULL;
+	      edgesPtr = NULL;
       }
 
       EdgeIterator(EdgeSet * _edges) {
-	 eIter = _edges->begin();
-	 edgesPtr = _edges;
+         eIter = _edges->begin();
+         edgesPtr = _edges;
       }
       EdgeIterator& operator++( void ){
-	 eIter++; eIter++;
-	 return *this;
+         eIter++; eIter++;
+         return *this;
       }
       EdgeIterator operator++( int ){
-	 EdgeIterator r = *this; ++*this; return r;
+      	 EdgeIterator r = *this; ++*this; return r;
       }
       EdgeIterator& operator--( void ){
-	 eIter--; eIter--;
-	 return *this;
+         eIter--; eIter--;
+         return *this;
       }
       EdgeIterator operator--( int ){
-	 EdgeIterator r = *this; --*this; return r;
+      	 EdgeIterator r = *this; --*this; return r;
       }
 
       Edge * edge( void ) const { return *eIter; }
@@ -269,8 +262,6 @@ public:
       void reset() {eIter = edgesPtr->begin(); }
       bool end(void) { return eIter == edgesPtr->end();}
    };
-
-
 
    FaceIterator faceIterator() {return FaceIterator(&faces);}
    VertexIterator vertexIterator() {return VertexIterator(&vertices);}
