@@ -86,8 +86,7 @@ class VertexBuffer
 {
 public:
 	std::vector<Eigen::Vector3d> deformedPosition; //deformed mesh position
-	std::vector<normalizedPoint> position; //primary backup
-	std::vector<normalizedPoint> positionConstrained; //primary backup
+	std::vector<Eigen::Vector3d> positionConstrained; //primary backup
 	std::vector<Eigen::Vector3d> laplacianCoordinate; //laplacian Coordinate
 	std::vector<Eigen::Vector3d> normal; //for rendering (lighting)
 	std::vector<Eigen::Vector3d> normalOrig; //primary backup
@@ -181,10 +180,37 @@ VertexBuffer vertexDescriptors;
 IndexBuffer triangles;
 std::vector<Handle> handles;
 
-Eigen::Vector3d _vector3d( const normalizedPoint& p)
-{
-	return Eigen::Vector3d(p.e1(), p.e2(), p.e3());
+
+Eigen::Affine3d MotorToMatrix(const TRversor &R) {
+	TRversor Ri = inverse(R);
+
+	// compute images of basis vectors:
+	c3ga::flatPoint imageOfE1NI = _flatPoint(R * c3ga::e1ni * Ri);
+	c3ga::flatPoint imageOfE2NI = _flatPoint(R * c3ga::e2ni * Ri);
+	c3ga::flatPoint imageOfE3NI = _flatPoint(R * c3ga::e3ni * Ri);
+	c3ga::flatPoint imageOfNONI = _flatPoint(R * c3ga::noni * Ri);
+
+	// create matrix representation:
+	Eigen::Affine3d M;
+	M(0, 0) = imageOfE1NI.m_c[0];
+	M(1, 0) = imageOfE1NI.m_c[1];
+	M(2, 0) = imageOfE1NI.m_c[2];
+	M(3, 0) = imageOfE1NI.m_c[3];
+	M(0, 1) = imageOfE2NI.m_c[0];
+	M(1, 1) = imageOfE2NI.m_c[1];
+	M(2, 1) = imageOfE2NI.m_c[2];
+	M(3, 1) = imageOfE2NI.m_c[3];
+	M(0, 2) = imageOfE3NI.m_c[0];
+	M(1, 2) = imageOfE3NI.m_c[1];
+	M(2, 2) = imageOfE3NI.m_c[2];
+	M(3, 2) = imageOfE3NI.m_c[3];
+	M(0, 3) = imageOfNONI.m_c[0];
+	M(1, 3) = imageOfNONI.m_c[1];
+	M(2, 3) = imageOfNONI.m_c[2];
+	M(3, 3) = imageOfNONI.m_c[3];
+	return M;
 }
+
 
 std::vector<Eigen::Vector3d> ComputeLaplacianCoordinates(std::shared_ptr<SparseMatrix> A, Mesh* mesh)
 {
@@ -293,14 +319,15 @@ int main(int argc, char* argv[])
 	for( Mesh::VertexIterator vIter = mesh.vertexIterator() ; !vIter.end() ; vIter++ )
 	{
 		int i = vIter.vertex()->ID;
-		vertexDescriptors.position[i] = c3gaPoint( vIter.vertex()->p.x(), vIter.vertex()->p.y(), vIter.vertex()->p.z() );
 		vertexDescriptors.normalOrig[i] = vIter.vertex()->n;
+
+		normalizedPoint position = c3gaPoint( vIter.vertex()->p.x(), vIter.vertex()->p.y(), vIter.vertex()->p.z() );
 
 		for( Handle& handle : handles)
 		{
 			TRversor TR = handle.GetTRVersor();
 
-			if( _double(vertexDescriptors.position[i] << (TR * handle.dS * inverse(TR))) > 0 ) //inside the sphere
+			if( _double(position << (TR * handle.dS * inverse(TR))) > 0 ) //inside the sphere
 			{
 				handle.constraints.insert(i);
 			}
@@ -325,9 +352,10 @@ int main(int argc, char* argv[])
 
 	for( Handle& handle : handles)
 	{
-		TRversor R1 = handle.GetTRVersor();
-		for(int i : handle.constraints)
-			vertexDescriptors.positionConstrained[i] = normalize(_point(inverse(R1) * vertexDescriptors.position[i] * R1));
+		Eigen::Affine3d Minv = MotorToMatrix(handle.GetTRVersor()).inverse();
+		for(int i : handle.constraints) {
+			vertexDescriptors.positionConstrained[i] = Minv * mesh.vertexAt(i)->p;
+		}
 	}
 
 	b3 = Eigen::MatrixXd(A->numRows(), 3);
@@ -343,20 +371,14 @@ void SolveLinearSystem(VertexBuffer& vertexDescriptors)
 {
 	int n = vertexDescriptors.get_size();
 
-	for( int i = 0 ; i < n ; ++i )
-	{
+	for( int i = 0 ; i < n ; ++i ) {
 		b3.row(i) = vertexDescriptors.laplacianCoordinate[i];
 	}
 
 	for( Handle& handle : handles) {
-		TRversor M = handle.GetTRVersor();
-		TRversor Minv = inverse(M);
-		for(int i : handle.constraints)
-		{
-			auto constraint = normalize(_point(M * vertexDescriptors.positionConstrained[i] * Minv));
-			b3(i,0) = constraint.e1();
-			b3(i,1) = constraint.e2();
-			b3(i,2) = constraint.e3();
+		Eigen::Affine3d M = MotorToMatrix(handle.GetTRVersor());
+		for(int i : handle.constraints) {
+			b3.row(i) = M * vertexDescriptors.positionConstrained[i];
 		}
 	}
 
