@@ -101,7 +101,6 @@ public:
 	{
 		this->size = size;
 		deformedPosition.resize(size);
-		position.resize(size);
 		positionConstrained.resize(size);
 		laplacianCoordinate.resize(size);
 		normal.resize(size);
@@ -387,7 +386,7 @@ void SolveLinearSystem(VertexBuffer& vertexDescriptors)
 	for( int i = 0 ; i < n ; ++i )
 	{
 		vertexDescriptors.deformedPosition[i] = xyz.row(i);
-		vertexDescriptors.normal[i] = vertexDescriptors.normalOrig[i];
+		vertexDescriptors.normal[i] = vertexDescriptors.R[i]._transformVector(vertexDescriptors.normalOrig[i]);
 	}
 }
 
