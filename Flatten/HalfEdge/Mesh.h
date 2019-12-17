@@ -90,6 +90,14 @@ public:
    bool checkVertexConection();
    void checkGaussianCurvature();
 
+   const std::vector<Vertex *>& getVertices() const { return vertices; }
+   const std::vector<Face *>& getFaces() const { return faces; }
+   const std::multiset<Edge*, Mesh::edge_comp>& getEdges() const { return edges; }
+
+   std::vector<Vertex *>& getVertices() { return vertices; }
+   std::vector<Face *>& getFaces() { return faces; }
+   std::multiset<Edge*, Mesh::edge_comp>& getEdges() { return edges; }
+
    /**
    Computes number of connected components, number of boundary loops and genus of the mesh.
 
@@ -118,155 +126,7 @@ public:
       std::cout << "* Vertices: " << numVertices() << std::endl;		
       std::cout << "*--------------------*\n" << std::endl;		
    }
-
-   class FaceIterator {
-   private:
-      FaceSet::iterator fIter;
-      FaceSet * facesPtr;
-   public:
-      FaceIterator() {
-	      facesPtr = NULL;
-      }
-
-      FaceIterator(FaceSet * _faces) {
-         facesPtr = _faces;
-         fIter = _faces->begin();
-      }
-      FaceIterator& operator++( void ){
-         fIter++;
-         return *this;
-      }
-      FaceIterator operator++( int ){
-      	 FaceIterator r = *this; ++*this; return r;
-      }
-      FaceIterator& operator--( void ){
-         fIter--;
-         return *this;
-      }
-      FaceIterator operator--( int ){
-      	 FaceIterator r = *this; --*this; return r;
-      }
-
-      Face * face( void ) const { return *fIter; }
-      //Face * & face( void )     { return *fIter; }
-
-      void reset() {fIter = facesPtr->begin(); }
-      bool end(void) { return fIter == facesPtr->end(); }
-   };
-
-   class VertexIterator {
-   private:
-      VertexSet::iterator vIter;
-      VertexSet * verticesPtr;
-   public:
-      VertexIterator() {
-	      verticesPtr = NULL;
-      }
-
-      VertexIterator(VertexSet * _vertices) {
-         vIter = _vertices->begin();
-         verticesPtr = _vertices;
-      }
-      VertexIterator& operator++( void ){
-         vIter++;
-         return *this;
-      }
-      VertexIterator operator++( int ){
-      	 VertexIterator r = *this; ++*this; return r;
-      }
-      VertexIterator& operator--( void ){
-         vIter--;
-         return *this;
-      }
-      VertexIterator operator--( int ){
-      	 VertexIterator r = *this; --*this; return r;
-      }
-
-      Vertex * vertex( void ) const { return *vIter; }
-      //Vertex * & vertex( void )     { return *vIter; }
-
-      void reset() {vIter = verticesPtr->begin();}
-      bool end(void) { return vIter == verticesPtr->end();}
-   };
-
-   class HalfEdgeIterator {
-   private:
-      EdgeSet::iterator eIter;
-      EdgeSet * edgesPtr;
-   public:
-      HalfEdgeIterator() {
-	      edgesPtr = NULL;
-      }
-      HalfEdgeIterator(EdgeSet * _edges) {
-         eIter = _edges->begin();
-         edgesPtr = _edges;
-      }
-      HalfEdgeIterator& operator++( void ){
-         eIter++;
-         return *this;
-      }
-      HalfEdgeIterator operator++( int ){
-         HalfEdgeIterator r = *this; ++*this; return r;
-      }
-      HalfEdgeIterator& operator--( void ){
-         eIter--;
-         return *this;
-      }
-      HalfEdgeIterator operator--( int ){
-      	 HalfEdgeIterator r = *this; --*this; return r;
-      }
-
-      Edge * half_edge( void ) const { return *eIter; }
-      //		Edge * & operator*( void )     { return *eIter; }
-
-      void find (Edge * eTmp) {
-	      eIter = edgesPtr->find(eTmp);
-      }
-
-      void reset() {eIter = edgesPtr->begin(); }
-      bool end (void) { return eIter == edgesPtr->end();}
-   };
-
-   class EdgeIterator {
-   private:
-      EdgeSet::iterator eIter;
-      EdgeSet * edgesPtr;
-
-   public:
-      EdgeIterator() {
-	      edgesPtr = NULL;
-      }
-
-      EdgeIterator(EdgeSet * _edges) {
-         eIter = _edges->begin();
-         edgesPtr = _edges;
-      }
-      EdgeIterator& operator++( void ){
-         eIter++; eIter++;
-         return *this;
-      }
-      EdgeIterator operator++( int ){
-      	 EdgeIterator r = *this; ++*this; return r;
-      }
-      EdgeIterator& operator--( void ){
-         eIter--; eIter--;
-         return *this;
-      }
-      EdgeIterator operator--( int ){
-      	 EdgeIterator r = *this; --*this; return r;
-      }
-
-      Edge * edge( void ) const { return *eIter; }
-      //		Edge * & operator*( void )     { return *eIter; }
-
-      void reset() {eIter = edgesPtr->begin(); }
-      bool end(void) { return eIter == edgesPtr->end();}
-   };
-
-   FaceIterator faceIterator() {return FaceIterator(&faces);}
-   VertexIterator vertexIterator() {return VertexIterator(&vertices);}
-   HalfEdgeIterator halfEdgeIterator() {return HalfEdgeIterator(&edges);}
-   EdgeIterator edgeIterator() {return EdgeIterator(&edges);}
 };
+
 #endif
 

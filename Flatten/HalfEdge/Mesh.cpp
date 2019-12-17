@@ -27,22 +27,12 @@ Mesh::~Mesh(void)
 }
 
 void Mesh::clear() {
-   VertexIterator vIter = vertexIterator();
-   FaceIterator fIter = faceIterator();
-   HalfEdgeIterator eIter = halfEdgeIterator();
-
-   while (!vIter.end()) {
-      delete vIter.vertex();
-      vIter++;
-   }
-   while (!fIter.end()) {
-      delete fIter.face();
-      fIter++;
-   }
-   while (!eIter.end()) {
-      delete eIter.half_edge();
-      eIter++;
-   }
+   for (Vertex * v : vertices) { delete v; }
+   for (Face* f : faces) { delete f; }
+   for (Edge* e : edges) { delete e; }
+   vertices.clear();
+   faces.clear();
+   edges.clear();
 }
 
 Vertex * Mesh::addVertex(const Eigen::Vector3d & _p) {
@@ -129,50 +119,44 @@ void Mesh::computeNormals()
 {
 	map< int, Eigen::Vector3d >					normals;
 
-	for( Mesh::FaceIterator fIter = this->faceIterator() ; !fIter.end() ; fIter++ )
-	{
-		Face		*face = fIter.face();
+	for (Face* face : faces) {
 		Eigen::Vector3d		u = face->edge->next->vertex->p - face->edge->vertex->p;
 		Eigen::Vector3d		v = face->edge->next->next->vertex->p - face->edge->vertex->p;
 		Eigen::Vector3d		n = u.cross(v).normalized();
 		normals.insert( pair<int, Eigen::Vector3d>(face->ID, n) );
 	}
 
-	for( Mesh::VertexIterator vIter = this->vertexIterator() ; !vIter.end() ; vIter++ )
-	{
+	for (Vertex* vertex : vertices) {
 		int		valence = 0;
-		vIter.vertex()->n = Eigen::Vector3d(0,0,0);
+		vertex->n = Eigen::Vector3d(0,0,0);
 
-		for( Vertex::EdgeAroundIterator	around = vIter.vertex()->iterator(); !around.end(); around++ )
+		for( Vertex::EdgeAroundIterator	around = vertex->iterator(); !around.end(); around++ )
 		{
 			if(around.edge_out()->face)
 			{
 				int		faceId = around.edge_out()->face->ID;
-				vIter.vertex()->n += normals[faceId];
+				vertex->n += normals[faceId];
 				valence++;
 			}
 		}
 
-		vIter.vertex()->n /= (double)valence;
-		vIter.vertex()->n.normalize();
+		vertex->n /= (double)valence;
+		vertex->n.normalize();
 	}
 }
 
 
 /** Called after the mesh is created to link boundary edges */
 void Mesh::linkBoundary() {
-   HalfEdgeIterator hIter = halfEdgeIterator();
-
-   for (; !hIter.end(); hIter++) {
-      if (!hIter.half_edge()->face) 
-	 hIter.half_edge()->vertex->edge = hIter.half_edge();
+   for (Edge* edge : edges) {
+      if (!edge->face) 
+	      edge->vertex->edge = edge;
    }
 
-    VertexIterator vIter = vertexIterator();
    Edge *next, *beg;
-   while (!vIter.end()) {
-      if (vIter.vertex()->isBoundary()) {
-         beg = vIter.vertex()->edge;
+   for (Vertex* vertex : vertices) {
+      if (vertex->isBoundary()) {
+         beg = vertex->edge;
          next = beg;
          while (beg->pair->face)
             beg = beg->pair->next;
@@ -180,7 +164,6 @@ void Mesh::linkBoundary() {
          beg->next = next;
          numBoundaryVertices++;
       }
-      vIter++;
    }
 
 }
@@ -197,47 +180,45 @@ Singularities should be assigned in such a way that Gauss-Bonet theorem is satis
 void Mesh::computeMeshInfo() {
    cout << "Topological information about the mesh:" << endl;
    // Number of boundary loops
-   Mesh::HalfEdgeIterator hIter = halfEdgeIterator();
-   for (; !hIter.end(); hIter++) {
-      hIter.half_edge()->check = false;
+   for (Edge* edge : edges) {
+      edge->check = false;
    }
    numBoundaryLoops = 0;
-   for (hIter.reset(); !hIter.end(); hIter++) {
-      Edge * e = hIter.half_edge();
+   for (Edge* edge : edges) {
+      Edge * e = edge;
       if (e->face)
-	 e->check = true;
+	      e->check = true;
       else if (!e->check) {
-	 Edge * beg = NULL;
-	 while (e != beg) {
-	    if (!beg) beg = e;
-	    check_error(!e, "Building the mesh failed, probem with input format.");
-	    e->check = true;
-	    e = e->next;
-	 }
-	 numBoundaryLoops++;
+	      Edge * beg = NULL;
+         while (e != beg) {
+            if (!beg) beg = e;
+            check_error(!e, "Building the mesh failed, probem with input format.");
+            e->check = true;
+            e = e->next;
+         }
+         numBoundaryLoops++;
       }
    }
    cout << "Mesh has " << numBoundaryLoops << " boundary loops." << endl;
    // Number of connected components
    numConnectedComponents = 0;
-   Mesh::FaceIterator fIter = faceIterator();
-   for (; !fIter.end(); fIter++) {
-      fIter.face()->check = false;
+   for (Face* face : faces) {
+      face->check = false;
    }
    stack<Edge *> toVisit;
-   for (fIter.reset(); !fIter.end(); fIter++) {
-      if (!fIter.face()->check) {
-	 numConnectedComponents++;
-	 toVisit.push(fIter.face()->edge);
-	 while (!toVisit.empty()) {
-	    Face * fIn = toVisit.top()->face; 
-	    toVisit.pop();
-	    fIn->check = true;     
-	    Face::EdgeAroundIterator iter = fIn->iterator();
-	    for (; !iter.end(); iter++) 
-	       if (iter.edge()->pair->face && !iter.edge()->pair->face->check)
-		  toVisit.push(iter.edge()->pair);
-	 }
+   for (Face* face : faces) {
+      if (!face->check) {
+         numConnectedComponents++;
+         toVisit.push(face->edge);
+         while (!toVisit.empty()) {
+            Face * fIn = toVisit.top()->face; 
+            toVisit.pop();
+            fIn->check = true;     
+            Face::EdgeAroundIterator iter = fIn->iterator();
+            for (; !iter.end(); iter++) 
+               if (iter.edge()->pair->face && !iter.edge()->pair->face->check)
+            toVisit.push(iter.edge()->pair);
+         }
       }
    }
    cout << "Mesh has " << numConnectedComponents << " connected components." << endl;
@@ -250,22 +231,20 @@ void Mesh::computeMeshInfo() {
 
 /** Check if all the vertices in the mesh have at least on edge coming out of them */
 bool Mesh::checkVertexConection() {
-   Mesh::FaceIterator fIter = faceIterator();
-   Mesh::VertexIterator vIter = vertexIterator();
    bool conectedVert = true;
 
-   for (;!vIter.end(); vIter++)
-      vIter.vertex()->check = false;
+   for (Vertex* vertex : vertices)
+      vertex->check = false;
 
-   for (fIter.reset(); !fIter.end(); fIter++) {
-      Face::EdgeAroundIterator around = fIter.face()->iterator();
+   for (Face* face : faces) {
+      Face::EdgeAroundIterator around = face->iterator();
       for (;!around.end();around++)
-	 around.vertex()->check = true;
+      	 around.vertex()->check = true;
    }
-   for (vIter.reset(); !vIter.end(); vIter++) {
-      if (!vIter.vertex()->check) {
-	 cerr << "Vertex " << vIter.vertex()->ID << " is not connected." << endl;
-	 conectedVert = false;
+   for (Vertex* vertex : vertices) {
+      if (!vertex->check) {
+	      cerr << "Vertex " << vertex->ID << " is not connected." << endl;
+	      conectedVert = false;
       }
    }
 
@@ -274,25 +253,23 @@ bool Mesh::checkVertexConection() {
 
 /** Manifoldness check: only one disk should be adjusted on any vertex */
 bool Mesh::checkManifold() {
-   Mesh::HalfEdgeIterator eIter = halfEdgeIterator();
-   Mesh::VertexIterator vIter = vertexIterator();
    bool manifold = true;
 
-   for (;!eIter.end(); eIter++)
-      eIter.half_edge()->check = false;
+   for (Edge* edge : edges)
+      edge->check = false;
 
-   for (vIter.reset(); !vIter.end(); vIter++) {
-      Vertex::EdgeAroundIterator around = vIter.vertex()->iterator();
+   for (Vertex* vertex : vertices) {
+      Vertex::EdgeAroundIterator around = vertex->iterator();
       for (;!around.end();around++)
-	 around.edge_out()->check = true;
+	      around.edge_out()->check = true;
    }
 
-   for (eIter.reset(); !eIter.end(); eIter++) {
-      if (!eIter.half_edge()->check) {
-	 cerr << "Mesh is not manifold - more then one disk at vertex " 
-	    << eIter.half_edge()->vertex->ID << endl;
-	 manifold = false;
-	 break;
+   for (Edge* edge : edges) {
+      if (!edge->check) {
+	      cerr << "Mesh is not manifold - more then one disk at vertex " 
+	            << edge->vertex->ID << endl;
+	      manifold = false;
+	      break;
       }
    }
 
@@ -305,14 +282,14 @@ void Mesh::CenterAndNormalize()
 	maxX = maxY = maxZ = -1e38;
 	minX = minY = minZ = 1e38;
 
-	for( VertexIterator vIter = vertexIterator() ; !vIter.end() ; vIter++ )
+	for (Vertex* vertex : vertices)
 	{
-		if(vIter.vertex()->p.x() > maxX) maxX = vIter.vertex()->p.x();
-		if(vIter.vertex()->p.y() > maxY) maxY = vIter.vertex()->p.y();
-		if(vIter.vertex()->p.z() > maxZ) maxZ = vIter.vertex()->p.z();
-		if(vIter.vertex()->p.x() < minX) minX = vIter.vertex()->p.x();
-		if(vIter.vertex()->p.y() < minY) minY = vIter.vertex()->p.y();
-		if(vIter.vertex()->p.z() < minZ) minZ = vIter.vertex()->p.z();
+		if(vertex->p.x() > maxX) maxX = vertex->p.x();
+		if(vertex->p.y() > maxY) maxY = vertex->p.y();
+		if(vertex->p.z() > maxZ) maxZ = vertex->p.z();
+		if(vertex->p.x() < minX) minX = vertex->p.x();
+		if(vertex->p.y() < minY) minY = vertex->p.y();
+		if(vertex->p.z() < minZ) minZ = vertex->p.z();
 	}
 
 	Eigen::Vector3d min(minX,minY,minZ);
@@ -320,16 +297,14 @@ void Mesh::CenterAndNormalize()
 
 	Eigen::Vector3d center = min + (max - min) * 0.5;
 
-	for( VertexIterator vIter = vertexIterator() ; !vIter.end() ; vIter++ )
-	{
-		vIter.vertex()->p -= center;
+	for (Vertex* vertex : vertices) {
+		vertex->p -= center;
 	}
 
 	double diag = (max - min).norm() / 2.0;
 	double scale = 1.0 / diag;
-	for( VertexIterator vIter = vertexIterator() ; !vIter.end() ; vIter++ )
-	{
-		vIter.vertex()->p *= scale;
+	for (Vertex* vertex : vertices) {
+		vertex->p *= scale;
 	}
 }
 
@@ -440,19 +415,17 @@ void Mesh::writeOBJ(const char * obj_file) {
    ofstream out(obj_file);
    check_error (!out, "Cannot find output file.");
 
-   Mesh::VertexIterator vItr = vertexIterator();
-   for (vItr.reset(); !vItr.end(); vItr++)
-      out << "v " << vItr.vertex()->p << endl;
+   for (Vertex* vertex : vertices)
+      out << "v " << vertex->p << endl;
 
-   for (vItr.reset(); !vItr.end(); vItr++)
-      out << "vt " << vItr.vertex()->uv.x() << " " << vItr.vertex()->uv.y() << endl;
+   for (Vertex* vertex : vertices)
+      out << "vt " << vertex->uv.x() << " " << vertex->uv.y() << endl;
 
-   Mesh::FaceIterator fItr = faceIterator();
-   for (fItr.reset(); !fItr.end(); fItr++) {
-      Face::EdgeAroundIterator around = fItr.face()->iterator();
+   for (Face* face : faces) {
+      Face::EdgeAroundIterator around = face->iterator();
       out << "f";
       for ( ; !around.end(); around++)
-	 out << " " << (around.vertex()->ID + 1) << "/" << (around.vertex()->ID + 1);
+	      out << " " << (around.vertex()->ID + 1) << "/" << (around.vertex()->ID + 1);
       out << endl;
    }
 }
@@ -462,7 +435,6 @@ void Mesh::writeVT(const char * vt_file) {
    ofstream out(vt_file);
    check_error (!out, "Cannot find output file.");
 
-   Mesh::VertexIterator vItr = vertexIterator();
-   for (vItr.reset(); !vItr.end(); vItr++)
-      out << "vt " << vItr.vertex()->uv.x() << " " << vItr.vertex()->uv.y() << endl;
+   for (Vertex* vertex : vertices)
+      out << "vt " << vertex->uv.x() << " " << vertex->uv.y() << endl;
 }

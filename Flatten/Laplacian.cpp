@@ -104,15 +104,15 @@ std::shared_ptr<SparseMatrix> CreateLaplacianMatrix(Mesh *mesh, int type)
 {
 	std::shared_ptr<SparseMatrix> L(new SparseMatrix(mesh->numVertices()));
 
-	for( Mesh::EdgeIterator eIter = mesh->edgeIterator() ; !eIter.end() ; eIter++ )
+	for( Edge* edge : mesh->getEdges())
 	{
-		int i = eIter.edge()->vertex->ID;
-		int j = eIter.edge()->pair->vertex->ID;
+		int i = edge->vertex->ID;
+		int j = edge->pair->vertex->ID;
 		double wij;
 		if(type == LaplaceBeltrami)
-			wij = CalcCotangentWeights(eIter.edge());
+			wij = CalcCotangentWeights(edge);
 		else if( type == MeanValue )
-			wij = CalcMeanValueWeights(eIter.edge());
+			wij = CalcMeanValueWeights(edge);
 		else
 			wij = 1.0; //uniform
 
@@ -121,12 +121,12 @@ std::shared_ptr<SparseMatrix> CreateLaplacianMatrix(Mesh *mesh, int type)
 	}
 
 	vector<double> areas;
-	for( Mesh::VertexIterator vIter = mesh->vertexIterator() ; !vIter.end() ; vIter++ )
+	for(Vertex* vertex : mesh->getVertices())
 	{
-		int i = vIter.vertex()->ID;
+		int i = vertex->ID;
 		double w = 0.0;
 		double area = 0.0;
-		for(Vertex::EdgeAroundIterator edgeAroundIter = vIter.vertex()->iterator() ; !edgeAroundIter.end() ; edgeAroundIter++)
+		for(Vertex::EdgeAroundIterator edgeAroundIter = vertex->iterator() ; !edgeAroundIter.end() ; edgeAroundIter++)
 		{
 			int j = edgeAroundIter.edge_out()->pair->vertex->ID;
 			w += (*L)(i, j);

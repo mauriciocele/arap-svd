@@ -85,12 +85,12 @@ public:
 class VertexBuffer
 {
 public:
-	std::vector<Eigen::Vector3d> deformedPosition; //deformed mesh position
-	std::vector<Eigen::Vector3d> positionConstrained; //primary backup
-	std::vector<Eigen::Vector3d> laplacianCoordinate; //laplacian Coordinate
-	std::vector<Eigen::Vector3d> normal; //for rendering (lighting)
-	std::vector<Eigen::Vector3d> normalOrig; //primary backup
-	std::vector<Eigen::Quaterniond> R;
+	std::vector<Eigen::Vector3d> deformedPositions; //deformed mesh positions
+	std::map<int,Eigen::Vector3d> constrainedPositions; //positional constraints
+	std::vector<Eigen::Vector3d> laplacianCoordinates; //laplacian Coordinates
+	std::vector<Eigen::Vector3d> normals; //for rendering (lighting)
+	std::vector<Eigen::Vector3d> normalsOrig; //original normals
+	std::vector<Eigen::Quaterniond> rotors;
 	int size;
 
 	VertexBuffer() : size(0)
@@ -100,12 +100,10 @@ public:
 	void resize(int size)
 	{
 		this->size = size;
-		deformedPosition.resize(size);
-		positionConstrained.resize(size);
-		laplacianCoordinate.resize(size);
-		normal.resize(size);
-		normalOrig.resize(size);
-		R.resize(size);
+		deformedPositions.resize(size);
+		normals.resize(size);
+		normalsOrig.resize(size);
+		rotors.resize(size);
 	}
 	int get_size() { return size; }
 };
@@ -309,18 +307,14 @@ int main(int argc, char* argv[])
 	//handles.push_back( boost::shared_ptr<Handle>( new Handle( _dualSphere(c3gaPoint(.0, 0.4,-.2) - 0.5*SQR(0.15)*ni), false, P1 ) ) );
 	//handles.push_back( boost::shared_ptr<Handle>( new Handle( _dualSphere(c3gaPoint(.0,-0.05,.1) - 0.5*SQR(0.15)*ni), true, P2 ) ) );
 
-	//handles[0]->extrema = 0;
-	//handles[1]->extrema = 1;
-	//extremas[0]->handle = 0;
-	//extremas[1]->handle = 1;
-
 	vertexDescriptors.resize(mesh.numVertices());
-	for( Mesh::VertexIterator vIter = mesh.vertexIterator() ; !vIter.end() ; vIter++ )
-	{
-		int i = vIter.vertex()->ID;
-		vertexDescriptors.normalOrig[i] = vIter.vertex()->n;
+	triangles.resize(mesh.numFaces()*3);
+	int n = vertexDescriptors.get_size();
 
-		normalizedPoint position = c3gaPoint( vIter.vertex()->p.x(), vIter.vertex()->p.y(), vIter.vertex()->p.z() );
+	for(Vertex* vertex : mesh.getVertices()) {
+		vertexDescriptors.normalsOrig[vertex->ID] = vertex->n;
+
+		normalizedPoint position = c3gaPoint( vertex->p.x(), vertex->p.y(), vertex->p.z() );
 
 		for( Handle& handle : handles)
 		{
@@ -328,14 +322,12 @@ int main(int argc, char* argv[])
 
 			if( _double(position << (TR * handle.dS * inverse(TR))) > 0 ) //inside the sphere
 			{
-				handle.constraints.insert(i);
+				handle.constraints.insert(vertex->ID);
 			}
 		}
 	}
 
-	triangles.resize(mesh.numFaces()*3);
-	for( Mesh::FaceIterator fIter = mesh.faceIterator() ; !fIter.end() ; fIter++ ) {
-		Face		*face = fIter.face();
+	for(Face* face : mesh.getFaces()) {
 		int i = face->ID;
 		int	v1 = face->edge->vertex->ID;
 		int	v2 = face->edge->next->vertex->ID;
@@ -347,13 +339,13 @@ int main(int argc, char* argv[])
 
 	A = CreateLaplacianMatrix( &mesh, systemType );
 	
-	vertexDescriptors.laplacianCoordinate = ComputeLaplacianCoordinates(A, &mesh);
+	vertexDescriptors.laplacianCoordinates = ComputeLaplacianCoordinates(A, &mesh);
 
 	for( Handle& handle : handles)
 	{
 		Eigen::Affine3d Minv = MotorToMatrix(handle.GetTRVersor()).inverse();
-		for(int i : handle.constraints) {
-			vertexDescriptors.positionConstrained[i] = Minv * mesh.vertexAt(i)->p;
+		for(int vertexID : handle.constraints) {
+			vertexDescriptors.constrainedPositions[vertexID] = Minv * mesh.vertexAt(vertexID)->p;
 		}
 	}
 
@@ -369,15 +361,14 @@ int main(int argc, char* argv[])
 void SolveLinearSystem(VertexBuffer& vertexDescriptors)
 {
 	int n = vertexDescriptors.get_size();
-
 	for( int i = 0 ; i < n ; ++i ) {
-		b3.row(i) = vertexDescriptors.laplacianCoordinate[i];
+		b3.row(i) = vertexDescriptors.laplacianCoordinates[i];
 	}
 
 	for( Handle& handle : handles) {
 		Eigen::Affine3d M = MotorToMatrix(handle.GetTRVersor());
 		for(int i : handle.constraints) {
-			b3.row(i) = M * vertexDescriptors.positionConstrained[i];
+			b3.row(i) = M * vertexDescriptors.constrainedPositions[i];
 		}
 	}
 
@@ -385,78 +376,48 @@ void SolveLinearSystem(VertexBuffer& vertexDescriptors)
 
 	for( int i = 0 ; i < n ; ++i )
 	{
-		vertexDescriptors.deformedPosition[i] = xyz.row(i);
-		vertexDescriptors.normal[i] = vertexDescriptors.R[i]._transformVector(vertexDescriptors.normalOrig[i]);
+		vertexDescriptors.deformedPositions[i] = xyz.row(i);
+		vertexDescriptors.normals[i] = vertexDescriptors.rotors[i]._transformVector(vertexDescriptors.normalsOrig[i]);
 	}
 }
 
 void UpdateLaplaciansRotation(Mesh *mesh, std::shared_ptr<SparseMatrix> A, VertexBuffer& vertexDescriptors)
 {
 	Eigen::Matrix3d m;
-	for( Mesh::VertexIterator vIter = mesh->vertexIterator() ; !vIter.end() ; vIter++ )
+	for( Vertex* vertex : mesh->getVertices() )
 	{
 		m.setZero();
-		int i = vIter.vertex()->ID;
+		int i = vertex->ID;
 		const Eigen::Vector3d &pi = mesh->vertexAt(i)->p;
-		const Eigen::Vector3d &tpi = vertexDescriptors.deformedPosition[i];
+		const Eigen::Vector3d &tpi = vertexDescriptors.deformedPositions[i];
 		double S = 0;
-		for(Vertex::EdgeAroundIterator edgeAroundIter = vIter.vertex()->iterator() ; !edgeAroundIter.end() ; edgeAroundIter++)
+		for(Vertex::EdgeAroundIterator edgeAroundIter = vertex->iterator() ; !edgeAroundIter.end() ; edgeAroundIter++)
 		{
 			int j = edgeAroundIter.edge_out()->pair->vertex->ID;
 			const Eigen::Vector3d &pj = mesh->vertexAt(j)->p;
-			const Eigen::Vector3d &tpj = vertexDescriptors.deformedPosition[j];
+			const Eigen::Vector3d &tpj = vertexDescriptors.deformedPositions[j];
 			Eigen::Vector3d eij = (pj - pi) * (*A)(i, j);
 			Eigen::Vector3d teij = tpj - tpi;
 			m += eij * teij.transpose();
 			S += eij.dot(eij);
 			S += teij.dot(teij) * (*A)(i, j);
 		}
-		vertexDescriptors.R[i] = GARotorEstimator(m, S);
+		vertexDescriptors.rotors[i] = GARotorEstimator(m, S);
 	}
 
-	for( Mesh::VertexIterator vIter = mesh->vertexIterator() ; !vIter.end() ; vIter++ )
+	for(Vertex* vertex : mesh->getVertices())
 	{
-		int i = vIter.vertex()->ID;
-		vertexDescriptors.laplacianCoordinate[i].setZero();
-		for(Vertex::EdgeAroundIterator edgeAroundIter = vIter.vertex()->iterator() ; !edgeAroundIter.end() ; edgeAroundIter++)
+		int i = vertex->ID;
+		vertexDescriptors.laplacianCoordinates[i].setZero();
+		for(Vertex::EdgeAroundIterator edgeAroundIter = vertex->iterator() ; !edgeAroundIter.end() ; edgeAroundIter++)
 		{
 			int j = edgeAroundIter.edge_out()->pair->vertex->ID;
 			double wij = (*A)(i, j);
-			Eigen::Quaterniond &Ri = vertexDescriptors.R[i];
-			Eigen::Quaterniond &Rj = vertexDescriptors.R[j];
+			Eigen::Quaterniond &Ri = vertexDescriptors.rotors[i];
+			Eigen::Quaterniond &Rj = vertexDescriptors.rotors[j];
 			Eigen::Vector3d V = mesh->vertexAt(j)->p - mesh->vertexAt(i)->p;
-			vertexDescriptors.laplacianCoordinate[i] += 0.5 * wij * (Ri._transformVector(V) + Rj._transformVector(V));
+			vertexDescriptors.laplacianCoordinates[i] += 0.5 * wij * (Ri._transformVector(V) + Rj._transformVector(V));
 		}
-	}
-}
-
-vectorE3GA Color( double d )
-{
-	static vectorE3GA	c0 = _vectorE3GA( 1, 1, 1);
-	static vectorE3GA	c1 = _vectorE3GA( 1, 1, 0);
-	static vectorE3GA	c2 = _vectorE3GA( 0, 1, 0);
-	static vectorE3GA	c3 = _vectorE3GA( 0, 1, 1);
-	static vectorE3GA	c4 = _vectorE3GA( 0, 0, 1);
-
-	if( d < 0.25 )
-	{
-		double alpha = (d - 0.0) / (0.25-0.0);
-		return (1.0 - alpha) * c0 + alpha * c1;
-	}
-	else if( d < 0.5 )
-	{
-		double alpha = (d - 0.25) / (0.5-0.25);
-		return (1.0 - alpha) * c1 + alpha * c2;
-	}
-	else if( d < 0.75 )
-	{
-		double alpha = (d - 0.5) / (0.75-0.5);
-		return (1.0 - alpha) * c2 + alpha * c3;
-	}
-	else
-	{
-		double alpha = (d - 0.75) / (1.0-0.75);
-		return (1.0 - alpha) * c3 + alpha * c4;
 	}
 }
 
@@ -530,7 +491,7 @@ void display()
 
 			oneTime = false;
 
-			for(int i = 0 ; i < 3 ; ++i)
+			for(int i = 0 ; i < 10 ; ++i)
 			{
 				UpdateLaplaciansRotation(&mesh, A, vertexDescriptors);
 				SolveLinearSystem(vertexDescriptors);
@@ -566,8 +527,8 @@ void display()
 	glColor4d( 1, 1, 1, alpha );
 	glEnableClientState(GL_NORMAL_ARRAY);
 	glEnableClientState(GL_VERTEX_ARRAY);
-	glVertexPointer(3, GL_DOUBLE, 0, &vertexDescriptors.deformedPosition[0]);
-	glNormalPointer(GL_DOUBLE, 0, &vertexDescriptors.normal[0]);
+	glVertexPointer(3, GL_DOUBLE, 0, &vertexDescriptors.deformedPositions[0]);
+	glNormalPointer(GL_DOUBLE, 0, &vertexDescriptors.normals[0]);
 	// draw the model
 	glDrawElements(GL_TRIANGLES, triangles.get_size(), GL_UNSIGNED_INT, &triangles.faces[0]);
 	// deactivate vertex arrays after drawing
@@ -583,7 +544,7 @@ void display()
 			glColor4d( .5, .5, .5, alpha );
 			glDisable( GL_LIGHTING );
 				glEnableClientState(GL_VERTEX_ARRAY);
-				glVertexPointer(3, GL_DOUBLE, 0, &vertexDescriptors.deformedPosition[0]);
+				glVertexPointer(3, GL_DOUBLE, 0, &vertexDescriptors.deformedPositions[0]);
 				// draw the model
 				glDrawElements(GL_TRIANGLES, triangles.get_size(), GL_UNSIGNED_INT, &triangles.faces[0]);
 				// deactivate vertex arrays after drawing
