@@ -27,7 +27,6 @@ Mesh::~Mesh(void)
 }
 
 void Mesh::clear() {
-   for (Vertex * v : vertices) { delete v; }
    for (Face* f : faces) { delete f; }
    for (Edge* e : edges) { delete e; }
    vertices.clear();
@@ -35,15 +34,15 @@ void Mesh::clear() {
    edges.clear();
 }
 
-Vertex * Mesh::addVertex(const Eigen::Vector3d & _p) {
-   Vertex * v = new Vertex();
-   v->p = _p;
-   v->ID = (int)vertices.size();
+int Mesh::addVertex(const Eigen::Vector3d & _p) {
+   Vertex v;
+   v.p = _p;
+   v.ID = (int)vertices.size();
    vertices.push_back(v);
-   return v;
+   return v.ID;
 }
 
-Face * Mesh::addFace(std::vector<int> faceVerts) {
+Face * Mesh::addFace(const std::vector<int>& faceVerts) {
    Face * f = new Face();
    f->ID = (int)faces.size();
 
@@ -61,9 +60,9 @@ Face * Mesh::addFace(std::vector<int> faceVerts) {
       current->face = f;
 
       if (last)
-	 last->next = current;
+	      last->next = current;
       else
-	 firstEdge = current;
+	      firstEdge = current;
       last = current;
    }
 
@@ -83,10 +82,10 @@ Face * Mesh::addFace(std::vector<int> faceVerts) {
 
 Edge * Mesh::addEdge (int i, int j) {
    Edge eTmp;
-   eTmp.vertex = vertices[i];
+   eTmp.vertex = &vertices[i];
 
    Edge eTmpPair;
-   eTmpPair.vertex = vertices[j];
+   eTmpPair.vertex = &vertices[j];
    eTmp.pair = &eTmpPair;
 
    Mesh::EdgeSet::iterator eIn = edges.find(&eTmp);
@@ -95,14 +94,14 @@ Edge * Mesh::addEdge (int i, int j) {
    if (eIn != edges.end()){
       e = *eIn;
       if (e->face != NULL)
-	 return NULL;
+	      return NULL;
    }
    else {
       e = new Edge();
       Edge * pair = new Edge();
 
-      e->vertex = vertices[i];
-      pair->vertex = vertices[j];
+      e->vertex = &vertices[i];
+      pair->vertex = &vertices[j];
 
       pair->pair = e;
       e->pair = pair;
@@ -126,22 +125,22 @@ void Mesh::computeNormals()
 		normals.insert( pair<int, Eigen::Vector3d>(face->ID, n) );
 	}
 
-	for (Vertex* vertex : vertices) {
+	for (Vertex& vertex : vertices) {
 		int		valence = 0;
-		vertex->n = Eigen::Vector3d(0,0,0);
+		vertex.n = Eigen::Vector3d(0,0,0);
 
-		for( Vertex::EdgeAroundIterator	around = vertex->iterator(); !around.end(); around++ )
+		for( Vertex::EdgeAroundIterator	around = vertex.iterator(); !around.end(); around++ )
 		{
 			if(around.edge_out()->face)
 			{
 				int		faceId = around.edge_out()->face->ID;
-				vertex->n += normals[faceId];
+				vertex.n += normals[faceId];
 				valence++;
 			}
 		}
 
-		vertex->n /= (double)valence;
-		vertex->n.normalize();
+		vertex.n /= (double)valence;
+		vertex.n.normalize();
 	}
 }
 
@@ -154,9 +153,9 @@ void Mesh::linkBoundary() {
    }
 
    Edge *next, *beg;
-   for (Vertex* vertex : vertices) {
-      if (vertex->isBoundary()) {
-         beg = vertex->edge;
+   for (Vertex& vertex : vertices) {
+      if (vertex.isBoundary()) {
+         beg = vertex.edge;
          next = beg;
          while (beg->pair->face)
             beg = beg->pair->next;
@@ -233,17 +232,17 @@ void Mesh::computeMeshInfo() {
 bool Mesh::checkVertexConection() {
    bool conectedVert = true;
 
-   for (Vertex* vertex : vertices)
-      vertex->check = false;
+   for (Vertex& vertex : vertices)
+      vertex.check = false;
 
    for (Face* face : faces) {
       Face::EdgeAroundIterator around = face->iterator();
       for (;!around.end();around++)
       	 around.vertex()->check = true;
    }
-   for (Vertex* vertex : vertices) {
-      if (!vertex->check) {
-	      cerr << "Vertex " << vertex->ID << " is not connected." << endl;
+   for (Vertex& vertex : vertices) {
+      if (!vertex.check) {
+	      cerr << "Vertex " << vertex.ID << " is not connected." << endl;
 	      conectedVert = false;
       }
    }
@@ -258,8 +257,8 @@ bool Mesh::checkManifold() {
    for (Edge* edge : edges)
       edge->check = false;
 
-   for (Vertex* vertex : vertices) {
-      Vertex::EdgeAroundIterator around = vertex->iterator();
+   for (Vertex& vertex : vertices) {
+      Vertex::EdgeAroundIterator around = vertex.iterator();
       for (;!around.end();around++)
 	      around.edge_out()->check = true;
    }
@@ -282,14 +281,14 @@ void Mesh::CenterAndNormalize()
 	maxX = maxY = maxZ = -1e38;
 	minX = minY = minZ = 1e38;
 
-	for (Vertex* vertex : vertices)
+	for (Vertex& vertex : vertices)
 	{
-		if(vertex->p.x() > maxX) maxX = vertex->p.x();
-		if(vertex->p.y() > maxY) maxY = vertex->p.y();
-		if(vertex->p.z() > maxZ) maxZ = vertex->p.z();
-		if(vertex->p.x() < minX) minX = vertex->p.x();
-		if(vertex->p.y() < minY) minY = vertex->p.y();
-		if(vertex->p.z() < minZ) minZ = vertex->p.z();
+		if(vertex.p.x() > maxX) maxX = vertex.p.x();
+		if(vertex.p.y() > maxY) maxY = vertex.p.y();
+		if(vertex.p.z() > maxZ) maxZ = vertex.p.z();
+		if(vertex.p.x() < minX) minX = vertex.p.x();
+		if(vertex.p.y() < minY) minY = vertex.p.y();
+		if(vertex.p.z() < minZ) minZ = vertex.p.z();
 	}
 
 	Eigen::Vector3d min(minX,minY,minZ);
@@ -297,14 +296,14 @@ void Mesh::CenterAndNormalize()
 
 	Eigen::Vector3d center = min + (max - min) * 0.5;
 
-	for (Vertex* vertex : vertices) {
-		vertex->p -= center;
+	for (Vertex& vertex : vertices) {
+		vertex.p -= center;
 	}
 
 	double diag = (max - min).norm() / 2.0;
 	double scale = 1.0 / diag;
-	for (Vertex* vertex : vertices) {
-		vertex->p *= scale;
+	for (Vertex& vertex : vertices) {
+		vertex.p *= scale;
 	}
 }
 
@@ -342,65 +341,65 @@ void Mesh::readOBJ(const char * obj_file) {
    while(!in.eof() || in.peek() != EOF) {
       in >> ws; //extract whitespaces
       if (in.eof() || in.peek() == EOF)
-	 break;
+	      break;
       if (in.peek() == '#') {
-	 in.ignore(300, '\n');
+	      in.ignore(300, '\n');
       }
       else {
-	 in >> front;
-	 if (front == v) {
-	    in >> vert.x() >> vert.y() >> vert.z();
-	    addVertex(vert);
-	 }
-	 else if (front == vt){
-	    in >> vert.x() >> vert.y();
-	    vert.z() = 0;
-	    uvVec.push_back(vert);
-	    hasUV = true;
-	 }
-	 else if (front == f) {
-	    verts.clear();
-	    uvs.clear();
-	    while (in >> id) {
+         in >> front;
+         if (front == v) {
+            in >> vert.x() >> vert.y() >> vert.z();
+            addVertex(vert);
+         }
+         else if (front == vt){
+            in >> vert.x() >> vert.y();
+            vert.z() = 0;
+            uvVec.push_back(vert);
+            hasUV = true;
+         }
+         else if (front == f) {
+            verts.clear();
+            uvs.clear();
+            while (in >> id) {
 
-	       check_error(id > numVertices(), "Problem with input OBJ file.");
+               check_error(id > numVertices(), "Problem with input OBJ file.");
 
-	       verts.push_back(id-1);
-	       bool vtNow = true;
-	       if (in.peek() == '/'){
-    		  in >> etc;
-		  if (in.peek() != '/') {
-      		     in >> id;
-		     check_warn(id > numVertices(), "Texture coordinate index is greater then number of vertices.");
-		     if (id < numVertices() && hasUV) {
-			uvs.push_back(id-1);
-			vtNow = false;
-		     }
-		  }
-	       }
-	       if (in.peek() == '/'){
-		  int tmp;
-   		  in >> etc;
-		  in >> tmp;
-	       }
-	       if (hasUV && vtNow) {
-		  uvs.push_back(id-1);
-	       }
-	    }
-	    in.clear(in.rdstate() & ~ios::failbit);
-	    Face * f = addFace(verts);
+               verts.push_back(id-1);
+               bool vtNow = true;
+               if (in.peek() == '/'){
+                  in >> etc;
+                  if (in.peek() != '/') {
+                     in >> id;
+                     check_warn(id > numVertices(), "Texture coordinate index is greater then number of vertices.");
+                     if (id < numVertices() && hasUV) {
+                        uvs.push_back(id-1);
+                        vtNow = false;
+                     }
+                  }
+               }
+               if (in.peek() == '/'){
+                  int tmp;
+                  in >> etc;
+                  in >> tmp;
+               }
+               if (hasUV && vtNow) {
+                  uvs.push_back(id-1);
+               }
+            }
+            in.clear(in.rdstate() & ~ios::failbit);
+            Face * f = addFace(verts);
 
-	    if (hasUV && uvs.size() != 0){
-	       int k = 0;
-	       for (Face::EdgeAroundIterator e = f->iterator(); !e.end(); e++, k++)
-		  e.vertex()->uv = uvVec[uvs[k]];
-	    }
-	 }
-	 else {
-	    string line;
-	    getline(in, line);
-	    cout << "Warning, line: " << line << " ignored." << endl;	
-	 }
+            if (hasUV && uvs.size() != 0){
+               int k = 0;
+               for (Face::EdgeAroundIterator e = f->iterator(); !e.end(); e++, k++)
+                  e.vertex()->uv = uvVec[uvs[k]];
+            }
+         }
+         else {
+            string line;
+            getline(in, line);
+            cout << "Warning, line: " << line << " ignored." << endl;	
+         }
       }
    }
 
@@ -415,11 +414,11 @@ void Mesh::writeOBJ(const char * obj_file) {
    ofstream out(obj_file);
    check_error (!out, "Cannot find output file.");
 
-   for (Vertex* vertex : vertices)
-      out << "v " << vertex->p << endl;
+   for (Vertex& vertex : vertices)
+      out << "v " << vertex.p << endl;
 
-   for (Vertex* vertex : vertices)
-      out << "vt " << vertex->uv.x() << " " << vertex->uv.y() << endl;
+   for (Vertex& vertex : vertices)
+      out << "vt " << vertex.uv.x() << " " << vertex.uv.y() << endl;
 
    for (Face* face : faces) {
       Face::EdgeAroundIterator around = face->iterator();
@@ -435,6 +434,6 @@ void Mesh::writeVT(const char * vt_file) {
    ofstream out(vt_file);
    check_error (!out, "Cannot find output file.");
 
-   for (Vertex* vertex : vertices)
-      out << "vt " << vertex->uv.x() << " " << vertex->uv.y() << endl;
+   for (Vertex& vertex : vertices)
+      out << "vt " << vertex.uv.x() << " " << vertex.uv.y() << endl;
 }

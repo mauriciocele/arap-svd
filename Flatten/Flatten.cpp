@@ -101,6 +101,7 @@ public:
 	{
 		this->size = size;
 		deformedPositions.resize(size);
+		laplacianCoordinates.resize(size);
 		normals.resize(size);
 		normalsOrig.resize(size);
 		rotors.resize(size);
@@ -209,10 +210,10 @@ Eigen::Affine3d MotorToMatrix(const TRversor &R) {
 }
 
 
-std::vector<Eigen::Vector3d> ComputeLaplacianCoordinates(std::shared_ptr<SparseMatrix> A, Mesh* mesh)
+void ComputeLaplacianCoordinates(std::shared_ptr<SparseMatrix> A, Mesh* mesh, std::vector<Eigen::Vector3d>& laplacianCoordinates)
 {
-	std::vector<Eigen::Vector3d> laplacianCoordinates(A->numColumns(), Eigen::Vector3d(0,0,0));
-	
+	std::fill(laplacianCoordinates.begin(), laplacianCoordinates.end(), Eigen::Vector3d(0,0,0));
+
 	auto numRows = A->numRows();
 
 	for( int i = 0; i < numRows ; ++i)
@@ -221,11 +222,9 @@ std::vector<Eigen::Vector3d> ComputeLaplacianCoordinates(std::shared_ptr<SparseM
 		for( ; !aIter.end() ; ++aIter )
 		{
 			auto j = aIter.columnIndex();
-			laplacianCoordinates[i] += mesh->vertexAt(j)->p * aIter.value();
+			laplacianCoordinates[i] += mesh->vertexAt(j).p * aIter.value();
 		}
 	}
-
-	return laplacianCoordinates;
 }
 
 bool is_constrained(std::vector<Handle>& handles, int vertex)
@@ -311,10 +310,10 @@ int main(int argc, char* argv[])
 	triangles.resize(mesh.numFaces()*3);
 	int n = vertexDescriptors.get_size();
 
-	for(Vertex* vertex : mesh.getVertices()) {
-		vertexDescriptors.normalsOrig[vertex->ID] = vertex->n;
+	for(Vertex& vertex : mesh.getVertices()) {
+		vertexDescriptors.normalsOrig[vertex.ID] = vertex.n;
 
-		normalizedPoint position = c3gaPoint( vertex->p.x(), vertex->p.y(), vertex->p.z() );
+		normalizedPoint position = c3gaPoint( vertex.p.x(), vertex.p.y(), vertex.p.z() );
 
 		for( Handle& handle : handles)
 		{
@@ -322,7 +321,7 @@ int main(int argc, char* argv[])
 
 			if( _double(position << (TR * handle.dS * inverse(TR))) > 0 ) //inside the sphere
 			{
-				handle.constraints.insert(vertex->ID);
+				handle.constraints.insert(vertex.ID);
 			}
 		}
 	}
@@ -339,13 +338,13 @@ int main(int argc, char* argv[])
 
 	A = CreateLaplacianMatrix( &mesh, systemType );
 	
-	vertexDescriptors.laplacianCoordinates = ComputeLaplacianCoordinates(A, &mesh);
+	ComputeLaplacianCoordinates(A, &mesh, vertexDescriptors.laplacianCoordinates);
 
 	for( Handle& handle : handles)
 	{
 		Eigen::Affine3d Minv = MotorToMatrix(handle.GetTRVersor()).inverse();
 		for(int vertexID : handle.constraints) {
-			vertexDescriptors.constrainedPositions[vertexID] = Minv * mesh.vertexAt(vertexID)->p;
+			vertexDescriptors.constrainedPositions[vertexID] = Minv * mesh.vertexAt(vertexID).p;
 		}
 	}
 
@@ -384,17 +383,17 @@ void SolveLinearSystem(VertexBuffer& vertexDescriptors)
 void UpdateLaplaciansRotation(Mesh *mesh, std::shared_ptr<SparseMatrix> A, VertexBuffer& vertexDescriptors)
 {
 	Eigen::Matrix3d m;
-	for( Vertex* vertex : mesh->getVertices() )
+	for( Vertex& vertex : mesh->getVertices() )
 	{
 		m.setZero();
-		int i = vertex->ID;
-		const Eigen::Vector3d &pi = mesh->vertexAt(i)->p;
+		int i = vertex.ID;
+		const Eigen::Vector3d &pi = mesh->vertexAt(i).p;
 		const Eigen::Vector3d &tpi = vertexDescriptors.deformedPositions[i];
 		double S = 0;
-		for(Vertex::EdgeAroundIterator edgeAroundIter = vertex->iterator() ; !edgeAroundIter.end() ; edgeAroundIter++)
+		for(Vertex::EdgeAroundIterator edgeAroundIter = vertex.iterator() ; !edgeAroundIter.end() ; edgeAroundIter++)
 		{
 			int j = edgeAroundIter.edge_out()->pair->vertex->ID;
-			const Eigen::Vector3d &pj = mesh->vertexAt(j)->p;
+			const Eigen::Vector3d &pj = mesh->vertexAt(j).p;
 			const Eigen::Vector3d &tpj = vertexDescriptors.deformedPositions[j];
 			Eigen::Vector3d eij = (pj - pi) * (*A)(i, j);
 			Eigen::Vector3d teij = tpj - tpi;
@@ -405,17 +404,17 @@ void UpdateLaplaciansRotation(Mesh *mesh, std::shared_ptr<SparseMatrix> A, Verte
 		vertexDescriptors.rotors[i] = GARotorEstimator(m, S);
 	}
 
-	for(Vertex* vertex : mesh->getVertices())
+	std::fill(vertexDescriptors.laplacianCoordinates.begin(), vertexDescriptors.laplacianCoordinates.end(), Eigen::Vector3d(0,0,0));
+	for(Vertex& vertex : mesh->getVertices())
 	{
-		int i = vertex->ID;
-		vertexDescriptors.laplacianCoordinates[i].setZero();
-		for(Vertex::EdgeAroundIterator edgeAroundIter = vertex->iterator() ; !edgeAroundIter.end() ; edgeAroundIter++)
+		int i = vertex.ID;
+		for(Vertex::EdgeAroundIterator edgeAroundIter = vertex.iterator() ; !edgeAroundIter.end() ; edgeAroundIter++)
 		{
 			int j = edgeAroundIter.edge_out()->pair->vertex->ID;
 			double wij = (*A)(i, j);
 			Eigen::Quaterniond &Ri = vertexDescriptors.rotors[i];
 			Eigen::Quaterniond &Rj = vertexDescriptors.rotors[j];
-			Eigen::Vector3d V = mesh->vertexAt(j)->p - mesh->vertexAt(i)->p;
+			Eigen::Vector3d V = mesh->vertexAt(j).p - mesh->vertexAt(i).p;
 			vertexDescriptors.laplacianCoordinates[i] += 0.5 * wij * (Ri._transformVector(V) + Rj._transformVector(V));
 		}
 	}
@@ -500,7 +499,7 @@ void display()
 	}
 	if(g_iterateManyTimes)
 	{
-		for(int i = 0 ; i < 40 ; ++i)
+		for(int i = 0 ; i < 400 ; ++i)
 		{
 			UpdateLaplaciansRotation(&mesh, A, vertexDescriptors);
 			SolveLinearSystem(vertexDescriptors);

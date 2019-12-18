@@ -121,12 +121,12 @@ std::shared_ptr<SparseMatrix> CreateLaplacianMatrix(Mesh *mesh, int type)
 	}
 
 	vector<double> areas;
-	for(Vertex* vertex : mesh->getVertices())
+	for(Vertex& vertex : mesh->getVertices())
 	{
-		int i = vertex->ID;
+		int i = vertex.ID;
 		double w = 0.0;
 		double area = 0.0;
-		for(Vertex::EdgeAroundIterator edgeAroundIter = vertex->iterator() ; !edgeAroundIter.end() ; edgeAroundIter++)
+		for(Vertex::EdgeAroundIterator edgeAroundIter = vertex.iterator() ; !edgeAroundIter.end() ; edgeAroundIter++)
 		{
 			int j = edgeAroundIter.edge_out()->pair->vertex->ID;
 			w += (*L)(i, j);

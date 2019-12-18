@@ -44,8 +44,8 @@ private:
    };
 
 
-   std::vector<Vertex *> vertices;
-   std::vector<Face *> faces;
+   std::vector<Vertex> vertices;
+   std::vector<Face*> faces;
    std::multiset<Edge*, Mesh::edge_comp> edges;
 
 public:
@@ -62,23 +62,23 @@ public:
    int numGenus;
 
    typedef std::multiset<Edge*, Mesh::edge_comp>  EdgeSet;
-   typedef std::vector<Face *> FaceSet;
-   typedef std::vector<Vertex *> VertexSet;
+   typedef std::vector<Face*> FaceSet;
+   typedef std::vector<Vertex> VertexSet;
 
    Mesh(void);
    ~Mesh(void);
    void clear();
 
-   Vertex * addVertex(const Eigen::Vector3d & p);
-   Face * addFace(std::vector<int> faceVerts);
+   int addVertex(const Eigen::Vector3d & p);
+   Face * addFace(const std::vector<int>& faceVerts);
    Edge * addEdge(int i, int j);
    Edge * addEdge(Edge * e) {
       edges.insert(e);
       return e;
    }
 
-   inline Vertex * vertexAt (int i) {return vertices[i];}
-   inline Face * faceAt (int i) {return faces[i];}
+   inline Vertex& vertexAt (int i) {return vertices[i];}
+   inline Face* faceAt (int i) {return faces[i];}
 
    inline int numFaces()     { return (int)faces.size();    }
    inline int numVertices()  { return (int)vertices.size(); }
@@ -90,12 +90,12 @@ public:
    bool checkVertexConection();
    void checkGaussianCurvature();
 
-   const std::vector<Vertex *>& getVertices() const { return vertices; }
-   const std::vector<Face *>& getFaces() const { return faces; }
+   const std::vector<Vertex>& getVertices() const { return vertices; }
+   const std::vector<Face*>& getFaces() const { return faces; }
    const std::multiset<Edge*, Mesh::edge_comp>& getEdges() const { return edges; }
 
-   std::vector<Vertex *>& getVertices() { return vertices; }
-   std::vector<Face *>& getFaces() { return faces; }
+   std::vector<Vertex>& getVertices() { return vertices; }
+   std::vector<Face*>& getFaces() { return faces; }
    std::multiset<Edge*, Mesh::edge_comp>& getEdges() { return edges; }
 
    /**
