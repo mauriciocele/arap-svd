@@ -326,11 +326,11 @@ int main(int argc, char* argv[])
 		}
 	}
 
-	for(Face* face : mesh.getFaces()) {
-		int i = face->ID;
-		int	v1 = face->edge->vertex->ID;
-		int	v2 = face->edge->next->vertex->ID;
-		int	v3 = face->edge->next->next->vertex->ID;
+	for(Face& face : mesh.getFaces()) {
+		int i = face.ID;
+		int	v1 = face.edge->vertex->ID;
+		int	v2 = face.edge->next->vertex->ID;
+		int	v3 = face.edge->next->next->vertex->ID;
 		triangles.faces[i*3 + 0] = v1;
 		triangles.faces[i*3 + 1] = v2;
 		triangles.faces[i*3 + 2] = v3;
