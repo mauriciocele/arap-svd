@@ -130,26 +130,29 @@ public:
 class Handle
 {
 public:
-	TRversor R;
-	TRversor T;
+	rotor R;
+	translator T;
+	translator Tcenter;
 	dualSphere dS;
 	std::set<int> constraints;
 
 	Handle() {
-		T = _TRversor(1.0);
-		R = _TRversor(1.0);
+		T = _rotor(1.0);
+		R = _translator(1.0);
+		Tcenter = _translator(1.0);
 	}
 	Handle(dualSphere dS)
 	{
 		normalizedPoint x = DualSphereCenter(dS);
-		T = _TRversor( exp(-0.5 * _vectorE3GA(x)^ni) );
-		R = _TRversor(1.0);
-		this->dS = inverse(T) * dS * T;
+		Tcenter = exp( -0.5*_vectorE3GA(x)*ni );
+		T = _translator(1.0);
+		R = _rotor(1.0);
+		this->dS = dS;
 	}
 
 	TRversor GetTRVersor()
 	{
-		return T * R;
+		return _TRversor(T * _TRversor(Tcenter * R * inverse(Tcenter)));
 	}
 };
 
@@ -322,6 +325,7 @@ int main(int argc, char* argv[])
 			if( _double(position << (TR * handle.dS * inverse(TR))) > 0 ) //inside the sphere
 			{
 				handle.constraints.insert(vertex.ID);
+				vertexDescriptors.constrainedPositions[vertex.ID] = vertex.p;
 			}
 		}
 	}
@@ -339,14 +343,6 @@ int main(int argc, char* argv[])
 	A = CreateLaplacianMatrix( &mesh, systemType );
 	
 	ComputeLaplacianCoordinates(A, &mesh, vertexDescriptors.laplacianCoordinates);
-
-	for( Handle& handle : handles)
-	{
-		Eigen::Affine3d Minv = MotorToMatrix(handle.GetTRVersor()).inverse();
-		for(int vertexID : handle.constraints) {
-			vertexDescriptors.constrainedPositions[vertexID] = Minv * mesh.vertexAt(vertexID).p;
-		}
-	}
 
 	b3 = Eigen::MatrixXd(A->numRows(), 3);
 
@@ -654,7 +650,7 @@ void MouseMotion(int x, int y)
 			rotor R1 =  _rotor( exp(-g_camera.rotateVel * (motion ^ e3) ) );
 			if(g_dragObject < handles.size())
 			{
-				TRversor R = handles[g_dragObject].R;
+				rotor R = handles[g_dragObject].R;
 				handles[g_dragObject].R = normalize(_TRversor( R1 * R  ) );
 			}
 		}
@@ -664,7 +660,7 @@ void MouseMotion(int x, int y)
 			normalizedTranslator T1 = _normalizedTranslator(inverse(g_modelRotor) * exp( _freeVector(-g_camera.translateVel*motion*ni) ) * g_modelRotor);
 			if(g_dragObject < handles.size())
 			{
-				TRversor T = handles[g_dragObject].T;
+				translator T = handles[g_dragObject].T;
 				handles[g_dragObject].T = normalize(_TRversor( T1 * T ));
 			}
 		}
