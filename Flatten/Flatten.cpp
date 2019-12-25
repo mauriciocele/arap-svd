@@ -391,11 +391,12 @@ void UpdateLaplaciansRotation(Mesh *mesh, std::shared_ptr<SparseMatrix> A, Verte
 			int j = edgeAroundIter.edge_out()->pair->vertex->ID;
 			const Eigen::Vector3d &pj = mesh->vertexAt(j).p;
 			const Eigen::Vector3d &tpj = vertexDescriptors.deformedPositions[j];
-			Eigen::Vector3d eij = (pj - pi) * (*A)(i, j);
+			const double wij = (*A)(i, j);
+			Eigen::Vector3d eij = (pj - pi);
 			Eigen::Vector3d teij = tpj - tpi;
-			m += eij * teij.transpose();
-			S += eij.dot(eij);
-			S += teij.dot(teij) * (*A)(i, j);
+			m += (wij * eij) * teij.transpose();
+			S += eij.dot(eij) * wij;
+			S += teij.dot(teij) * wij;
 		}
 		vertexDescriptors.rotors[i] = GARotorEstimator(m, S);
 	}
