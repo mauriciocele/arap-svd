@@ -168,7 +168,6 @@ bool g_computeBasis = false;
 float g_dragDistance = -1.0f;
 int g_dragObject;
 std::shared_ptr<SparseMatrix> A;
-Eigen::SparseMatrix<double> Lc;
 Eigen::SparseLU<Eigen::SparseMatrix<double>, Eigen::COLAMDOrdering<int>> solver;
 int systemType = LaplaceBeltrami; //MeanValue; //LaplaceBeltrami
 bool g_showSpheres = true;
@@ -241,7 +240,7 @@ bool is_constrained(std::vector<Handle>& handles, int vertex)
 
 void PreFactor(std::shared_ptr<SparseMatrix> A, std::vector<Handle>& handles)
 {
-	Lc = Eigen::SparseMatrix<double>(A->numRows(), A->numColumns());
+	Eigen::SparseMatrix<double> Lc = Eigen::SparseMatrix<double>(A->numRows(), A->numColumns());
 
 	auto numRows = A->numRows();
 	for( int i = 0; i < numRows ; ++i)
