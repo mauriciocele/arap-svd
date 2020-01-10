@@ -20,12 +20,6 @@
     <None Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="stdafx.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="targetver.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="HalfEdge\Edge.h">
       <Filter>HalfEdge</Filter>
     </ClInclude>
@@ -36,9 +30,6 @@
       <Filter>HalfEdge</Filter>
     </ClInclude>
     <ClInclude Include="HalfEdge\util.h">
-      <Filter>HalfEdge</Filter>
-    </ClInclude>
-    <ClInclude Include="HalfEdge\Vector3.h">
       <Filter>HalfEdge</Filter>
     </ClInclude>
     <ClInclude Include="HalfEdge\Vertex.h">
@@ -122,43 +113,25 @@
     <ClInclude Include="GA\timing.h">
       <Filter>GA</Filter>
     </ClInclude>
-    <ClInclude Include="gahelper.h">
-      <Filter>Source Files</Filter>
+    <ClInclude Include="GARotorEstimator.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="primitivedraw.h">
-      <Filter>Source Files</Filter>
+    <ClInclude Include="gahelper.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Laplacian.h">
-      <Filter>Source Files</Filter>
+      <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="LengthCorrector.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="MatrixNxM.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="svd.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="ICP.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Matrix3x3.h">
-      <Filter>Source Files</Filter>
+    <ClInclude Include="primitivedraw.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="stdafx.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="Flatten.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="HalfEdge\Mesh.cpp">
       <Filter>HalfEdge</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\Include\geometry.Cpp">
-      <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="GA\c2ga.cpp">
       <Filter>GA</Filter>
@@ -241,16 +214,10 @@
     <ClCompile Include="primitivedraw.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="gahelper.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="Laplacian.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="svd.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="ICP.cpp">
+    <ClCompile Include="GARotorEstimator.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
